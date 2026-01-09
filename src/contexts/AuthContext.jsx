@@ -11,36 +11,19 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         let mounted = true;
 
-        // Safety Timeout: Enable manual bypass after 5 seconds
+        // Safety Timeout: Enable manual bypass after 3 seconds (faster fallback)
         const maxWait = setTimeout(() => {
             if (mounted && loading) {
                 console.warn("Auth initialization timed out.");
-                setShowBypass(true); // Show button instead of forcing state immediately causing potential conflicts
+                setShowBypass(true);
             }
-        }, 5000);
+        }, 3000);
 
-        // 1. Check active session
-        const getSession = async () => {
-            // ... existing logic ...
-            try {
-                const { data: { session }, error } = await supabase.auth.getSession();
-                if (error) throw error;
-
-                if (session?.user) {
-                    if (mounted) await fetchProfile(session.user);
-                } else {
-                    if (mounted) setLoading(false);
-                }
-            } catch (error) {
-                console.error("Auth Init Error:", error);
-                if (mounted) setLoading(false);
-            }
-        };
-
-        getSession();
-
-        // 2. Listen for auth changes
+        // 2. Listen for auth changes (Primary Source of Truth)
+        // This handles INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, etc.
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log("Auth Event:", event);
+
             if (session?.user) {
                 if (mounted) await fetchProfile(session.user);
             } else {
@@ -53,7 +36,7 @@ export const AuthProvider = ({ children }) => {
 
         return () => {
             mounted = false;
-            clearTimeout(maxWait); // Clear timeout on unmount
+            clearTimeout(maxWait);
             subscription.unsubscribe();
         };
     }, []);
