@@ -10,8 +10,17 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         let mounted = true;
 
+        // Safety Timeout: Force loading to false after 5 seconds if Supabase hangs
+        const maxWait = setTimeout(() => {
+            if (mounted && loading) {
+                console.warn("Auth initialization timed out, forcing load.");
+                setLoading(false);
+            }
+        }, 5000);
+
         // 1. Check active session
         const getSession = async () => {
+            // ... existing logic ...
             try {
                 const { data: { session }, error } = await supabase.auth.getSession();
                 if (error) throw error;
