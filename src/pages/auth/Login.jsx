@@ -19,15 +19,11 @@ export default function Login() {
             const { user } = await login(email, password);
 
             // Fetch the specific user profile to check role immediately
-            const { data: profile, error: profileError } = await supabase
+            const { data: profile } = await supabase
                 .from('profiles')
                 .select('role')
                 .eq('id', user.id)
                 .single();
-
-            // DEBUG: Show what we found
-            if (profileError) alert("Erreur Profile: " + profileError.message);
-            else alert("Debug Role trouvé: " + (profile?.role || 'Aucun (-> author)'));
 
             const role = profile?.role || 'author'; // Default to author if undefined
 
