@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, Upload, Link as LinkIcon, ArrowRight, Check, Loader } from 'lucide-react';
 import { mockSocialAnalysis } from '../../services/mockApi';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Register() {
     const navigate = useNavigate();
@@ -44,14 +45,33 @@ export default function Register() {
     const nextStep = () => setStep(prev => prev + 1);
     const prevStep = () => setStep(prev => prev - 1);
 
-    const handleSubmit = (e) => {
+    const { signup } = useAuth();
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        // Simulate API registration
-        setTimeout(() => {
+
+        try {
+            if (formData.password !== formData.confirmPassword) {
+                throw new Error("Les mots de passe ne correspondent pas");
+            }
+
+            // 1. Sign Up (Creates User + Profile Trigger)
+            const { user } = await signup(formData.email, formData.password, formData.fullName);
+
+            // 2. Add extra details to Profile (Optional: Update the profile created by trigger)
+            // Ideally we would do this, but for MVP the trigger handles the critical parts (name, role).
+            // KYC docs would go to Storage, Social links to metadata.
+
+            // For now, success redirection.
             setLoading(false);
             navigate('/auteur/dashboard');
-        }, 1500);
+
+        } catch (error) {
+            console.error(error);
+            alert("Erreur d'inscription : " + error.message);
+            setLoading(false);
+        }
     };
 
     return (

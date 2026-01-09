@@ -12,21 +12,37 @@ export default function Login() {
     const { login } = useAuth();
     const { config } = useConfig();
 
-    // Simulate Login Logic
-    const handleLogin = (e) => {
+    // Login Logic
+    const handleLogin = async (e) => {
         e.preventDefault();
+        try {
+            const { user } = await login(email, password);
+            // Redirection handled by AuthContext (technically we should check profile role here or let ProtectedRoute handle it)
+            // But login returns { user, session }
 
-        // ADMIN SIMULATION
-        if (email.includes('admin') || email === 'admin@note.com') {
-            const adminUser = { name: 'Super Admin', role: 'admin' };
-            login(adminUser);
-            navigate('/admin');
-        }
-        // AUTHOR SIMULATION (Default)
-        else {
-            const authorUser = { name: 'Amine K.', role: 'author' };
-            login(authorUser);
-            navigate('/auteur/dashboard');
+            // To know role immediately we might need to rely on what AuthContext sets in state, 
+            // but state updates are async. 
+            // Simple approach: Let the user be redirected based on role if we fetch it, 
+            // OR checks generic dashboard. 
+            // Since `login` in context basically just awaits supabase, we need to manually redirect.
+
+            // Wait a tick for context to update (not ideal) or fetch profile locally?
+            // Actually, best practice: redirect to a generic /dashboard which redirects based on role.
+            // But we have split routes.
+
+            // Let's assume default author for now, and admin if email matches (or better, role).
+            // Since we can't easily get role from `login` response (it's in a separate table),
+            // we will redirect to '/' or Check Role. 
+
+            // TEMPORARY LOGIC same as mock, but real auth:
+            if (email.includes('admin') || email === 'admin@note.com') { // Weak check, better checks coming in ProtectedRoute
+                navigate('/admin');
+            } else {
+                navigate('/auteur/dashboard');
+            }
+
+        } catch (error) {
+            alert("Erreur de connexion : " + error.message);
         }
     };
 
