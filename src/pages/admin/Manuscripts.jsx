@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText, Search, Filter, MoreVertical, CheckCircle, Clock, User, AlertCircle, Download, Eye, Check, X, BookOpen, TrendingUp, AlertTriangle } from 'lucide-react';
+import { supabase } from '../../supabaseClient';
 
 export default function Manuscripts() {
     const [filter, setFilter] = useState('all'); // all, pending_user, verified_user
@@ -8,11 +9,40 @@ export default function Manuscripts() {
     const [activeAiAxe, setActiveAiAxe] = useState(null);
 
     // Mock Data including regular users and express (lead capture) submissions
-    // Mock Data - Load from LocalStorage (Simulate DB)
-    const [manuscripts, setManuscripts] = useState(() => {
-        const saved = localStorage.getItem('site_manuscripts');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [manuscripts, setManuscripts] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch from Supabase
+    useEffect(() => {
+        const fetchManuscripts = async () => {
+            const { data, error } = await supabase
+                .from('manuscripts')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('Error fetching manuscripts:', error);
+            } else {
+                // Transform data to match UI expected shape
+                const formatted = data.map(m => ({
+                    id: m.id,
+                    title: m.title,
+                    author: m.author_name,
+                    email: m.email,
+                    category: m.category,
+                    status: "En attente", // Default UI status
+                    accountStatus: m.status, // Database status
+                    score: 0, // AI score pending
+                    date: new Date(m.created_at).toLocaleDateString(),
+                    ...m.metadata // Spread metadata (pitch, summary, etc)
+                }));
+                setManuscripts(formatted);
+            }
+            setLoading(false);
+        };
+
+        fetchManuscripts();
+    }, []);
     const filteredManuscripts = manuscripts.filter(m => {
         const matchesSearch = m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             m.author.toLowerCase().includes(searchQuery.toLowerCase());
