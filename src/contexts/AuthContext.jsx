@@ -6,15 +6,16 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [showBypass, setShowBypass] = useState(false); // New state
 
     useEffect(() => {
         let mounted = true;
 
-        // Safety Timeout: Force loading to false after 5 seconds if Supabase hangs
+        // Safety Timeout: Enable manual bypass after 5 seconds
         const maxWait = setTimeout(() => {
             if (mounted && loading) {
-                console.warn("Auth initialization timed out, forcing load.");
-                setLoading(false);
+                console.warn("Auth initialization timed out.");
+                setShowBypass(true); // Show button instead of forcing state immediately causing potential conflicts
             }
         }, 5000);
 
@@ -52,6 +53,7 @@ export const AuthProvider = ({ children }) => {
 
         return () => {
             mounted = false;
+            clearTimeout(maxWait); // Clear timeout on unmount
             subscription.unsubscribe();
         };
     }, []);
@@ -103,9 +105,21 @@ export const AuthProvider = ({ children }) => {
         <AuthContext.Provider value={{ user, login, signup, logout, loading }}>
             {loading ? (
                 <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white font-sans">
-                    <div className="animate-pulse flex flex-col items-center">
+                    <div className="flex flex-col items-center p-8 bg-slate-900 rounded-2xl border border-slate-800 shadow-xl">
                         <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="text-slate-400">Chargement de l'application...</p>
+                        <p className="text-slate-400 mb-4">Chargement de l'application...</p>
+
+                        {showBypass && (
+                            <div className="animate-fade-in text-center flex flex-col gap-2">
+                                <p className="text-sm text-red-400">Le chargement semble bloqué.</p>
+                                <button
+                                    onClick={() => setLoading(false)}
+                                    className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors"
+                                >
+                                    Forcer l'accès au site
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : children}
