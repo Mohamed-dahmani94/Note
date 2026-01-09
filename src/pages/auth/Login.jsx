@@ -1,9 +1,9 @@
-
 import { useState } from 'react';
 import { Mail, Lock, ArrowRight, User, ShieldCheck } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfig } from '../../contexts/ConfigContext';
+import { supabase } from '../../supabaseClient';
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -17,31 +17,24 @@ export default function Login() {
         e.preventDefault();
         try {
             const { user } = await login(email, password);
-            // Redirection handled by AuthContext (technically we should check profile role here or let ProtectedRoute handle it)
-            // But login returns { user, session }
 
-            // To know role immediately we might need to rely on what AuthContext sets in state, 
-            // but state updates are async. 
-            // Simple approach: Let the user be redirected based on role if we fetch it, 
-            // OR checks generic dashboard. 
-            // Since `login` in context basically just awaits supabase, we need to manually redirect.
+            // Fetch the specific user profile to check role immediately
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
 
-            // Wait a tick for context to update (not ideal) or fetch profile locally?
-            // Actually, best practice: redirect to a generic /dashboard which redirects based on role.
-            // But we have split routes.
+            const role = profile?.role || 'author'; // Default to author if undefined
 
-            // Let's assume default author for now, and admin if email matches (or better, role).
-            // Since we can't easily get role from `login` response (it's in a separate table),
-            // we will redirect to '/' or Check Role. 
-
-            // TEMPORARY LOGIC same as mock, but real auth:
-            if (email.includes('admin') || email === 'admin@note.com') { // Weak check, better checks coming in ProtectedRoute
+            if (role === 'admin') {
                 navigate('/admin');
             } else {
                 navigate('/auteur/dashboard');
             }
 
         } catch (error) {
+            console.error(error);
             alert("Erreur de connexion : " + error.message);
         }
     };
