@@ -11,14 +11,6 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         let mounted = true;
 
-        // Safety Timeout: Enable manual bypass after 3 seconds (faster fallback)
-        const maxWait = setTimeout(() => {
-            if (mounted && loading) {
-                console.warn("Auth initialization timed out.");
-                setShowBypass(true);
-            }
-        }, 3000);
-
         // 2. Listen for auth changes (Primary Source of Truth)
         // This handles INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, etc.
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -36,7 +28,6 @@ export const AuthProvider = ({ children }) => {
 
         return () => {
             mounted = false;
-            clearTimeout(maxWait);
             subscription.unsubscribe();
         };
     }, []);
