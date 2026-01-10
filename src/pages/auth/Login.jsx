@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Mail, Lock, User, Github, Facebook, Apple } from 'lucide-react'; // Simulating social icons
+import { Mail, Lock, User, Facebook, Apple } from 'lucide-react';
 import LanguageSwitcher from '../../components/LanguageSwitcher';
 
 const Login = () => {
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
     const { login, signup } = useAuth();
     const navigate = useNavigate();
 
@@ -27,59 +27,86 @@ const Login = () => {
         try {
             if (isLogin) {
                 await login(email, password);
-                navigate('/admin'); // Or redirect based on role later
+                navigate('/admin');
             } else {
                 await signup(email, password, fullName);
                 alert("Compte créé ! Vérifiez votre email.");
                 setIsLogin(true);
             }
         } catch (err) {
-            setError(err.message);
+            // Translate common Supabase errors if possible
+            let msg = err.message;
+            if (msg.includes("Invalid login credentials")) msg = t("error_invalid_credentials", { defaultValue: "Email ou mot de passe incorrect." });
+            setError(msg);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSocialLogin = async (provider) => {
-        // Implementation for Supabase OAuth
-        console.log(`Login with ${provider}`);
+    const handleSocialLogin = (provider) => {
+        // Mock function for consistency
         alert(`Social Login with ${provider} requires Supabase configuration.`);
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 flex flex-col relative overflow-hidden">
-            {/* Navbar (Minimal) */}
-            <div className="absolute top-0 w-full p-6 flex justify-between items-center z-10">
-                <h1 className="text-xl font-bold bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent cursor-pointer" onClick={() => navigate('/')}>
-                    Note.dz
+        <div className="min-h-screen bg-white relative overflow-hidden flex items-center justify-center font-sans text-gray-800">
+
+            {/* --- DECORATIVE BLOBS (Note Identity) --- */}
+            {/* Top Left Blob */}
+            <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-gradient-to-br from-note-purple to-violet-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+            {/* Bottom Right Blob */}
+            <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-gradient-to-tl from-violet-600 to-note-purple rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+            {/* Middle Accent Blob */}
+            <div className="absolute top-[20%] right-[20%] w-[300px] h-[300px] bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+
+
+            {/* --- NAVBAR HELPER --- */}
+            <div className="absolute top-0 w-full p-6 flex justify-between items-center z-20">
+                <h1 className="text-2xl font-bold text-note-purple cursor-pointer flex items-center gap-2" onClick={() => navigate('/')}>
+                    Note<span className="text-gray-400 text-sm font-normal">.dz</span>
                 </h1>
                 <LanguageSwitcher />
             </div>
 
-            <div className="flex-1 flex items-center justify-center p-4">
-                <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md relative z-10 backdrop-blur-sm bg-opacity-95">
+            {/* --- MAIN CARD --- */}
+            <div className="relative z-10 w-full max-w-4xl flex flex-col md:flex-row bg-white/80 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden border border-white/50 m-4">
 
-                    <h2 className="text-3xl font-bold text-white mb-2 text-center">
-                        {isLogin ? t('login') : t('register_btn')}
+                {/* Left Side: Visual/Branding (Hidden on mobile) */}
+                <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-note-purple to-violet-700 p-10 flex-col justify-center text-white relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                    <h2 className="text-4xl font-bold mb-4 relative z-10">
+                        {isLogin ? t('welcome_back', { defaultValue: "Bon retour !" }) : t('join_us', { defaultValue: "Rejoignez-nous" })}
                     </h2>
-                    <p className="text-slate-400 text-center mb-8 text-sm">
+                    <p className="text-violet-100 text-lg relative z-10">
+                        {t('hero_subtitle')}
+                    </p>
+                </div>
+
+                {/* Right Side: Form */}
+                <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
+
+                    <h3 className="text-2xl font-bold text-deep-black mb-2 text-center">
+                        {isLogin ? t('login') : t('register_btn')}
+                    </h3>
+                    <p className="text-gray-400 text-center mb-8 text-sm">
                         {t('subtitle')}
                     </p>
 
                     {error && (
-                        <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-3 rounded-lg mb-6 text-sm">
+                        <div className="bg-red-50 text-red-500 p-3 rounded-lg mb-6 text-sm text-center border border-red-100">
                             {error}
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-5">
+
                         {!isLogin && (
-                            <div className="relative">
-                                <User className="absolute left-3 top-3.5 h-5 w-5 text-slate-500" />
+                            <div className="relative group">
+                                <User className="absolute left-4 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-note-purple transition-colors" />
                                 <input
                                     type="text"
                                     placeholder={t('full_name')}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg py-3 px-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-full py-3 px-12 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-note-purple/50 focus:border-note-purple transition-all shadow-sm"
                                     value={fullName}
                                     onChange={(e) => setFullName(e.target.value)}
                                     required
@@ -87,71 +114,78 @@ const Login = () => {
                             </div>
                         )}
 
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-3.5 h-5 w-5 text-slate-500" />
+                        <div className="relative group">
+                            <Mail className="absolute left-4 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-note-purple transition-colors" />
                             <input
                                 type="email"
                                 placeholder={t('email')}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-lg py-3 px-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                                className="w-full bg-gray-50 border border-gray-100 rounded-full py-3 px-12 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-note-purple/50 focus:border-note-purple transition-all shadow-sm"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
                             />
                         </div>
 
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3.5 h-5 w-5 text-slate-500" />
+                        <div className="relative group">
+                            <Lock className="absolute left-4 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-note-purple transition-colors" />
                             <input
                                 type="password"
                                 placeholder={t('password')}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-lg py-3 px-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all"
+                                className="w-full bg-gray-50 border border-gray-100 rounded-full py-3 px-12 text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-note-purple/50 focus:border-note-purple transition-all shadow-sm"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
                             />
                         </div>
 
+                        {isLogin && (
+                            <div className="text-right">
+                                <a href="#" className="text-xs text-gray-400 hover:text-note-purple transition-colors">
+                                    {t('forgot_password')}
+                                </a>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                            className="w-full bg-gradient-to-r from-note-purple to-violet-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold py-3 px-4 rounded-full shadow-lg shadow-violet-200 transform transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {loading ? t('loading') : (isLogin ? t('login_btn') : t('register_btn'))}
+                            {loading ? t('loading') : (isLogin ? t('login_btn').toUpperCase() : t('register_btn').toUpperCase())}
                         </button>
                     </form>
 
                     <div className="mt-8">
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-slate-800"></div>
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                                <span className="px-2 bg-slate-900 text-slate-500 uppercase">{t('or')}</span>
-                            </div>
+                        <div className="relative flex py-2 items-center">
+                            <div className="flex-grow border-t border-gray-100"></div>
+                            <span className="flex-shrink mx-4 text-gray-300 text-xs uppercase">{t('or')}</span>
+                            <div className="flex-grow border-t border-gray-100"></div>
                         </div>
 
-                        <div className="mt-6 flex gap-4 justify-center">
-                            <button onClick={() => handleSocialLogin('google')} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-full transition-colors group" title={t('google_login')}>
-                                <span className="text-white font-bold">G</span>
+                        <div className="mt-4 flex gap-4 justify-center">
+                            <button onClick={() => handleSocialLogin('google')} className="p-3 bg-white border border-gray-100 hover:bg-gray-50 rounded-full shadow-sm transition-all hover:shadow-md" title={t('google_login')}>
+                                <span className="text-red-500 font-bold text-xl">G</span>
                             </button>
-                            <button onClick={() => handleSocialLogin('facebook')} className="p-3 bg-slate-800 hover:bg-blue-900/50 rounded-full transition-colors" title={t('facebook_login')}>
-                                <Facebook className="w-5 h-5 text-blue-500" />
+                            <button onClick={() => handleSocialLogin('facebook')} className="p-3 bg-white border border-gray-100 hover:bg-gray-50 rounded-full shadow-sm transition-all hover:shadow-md" title={t('facebook_login')}>
+                                <Facebook className="w-6 h-6 text-blue-600" />
                             </button>
-                            <button onClick={() => handleSocialLogin('apple')} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-full transition-colors" title={t('apple_login')}>
-                                <Apple className="w-5 h-5 text-white" />
+                            <button onClick={() => handleSocialLogin('apple')} className="p-3 bg-white border border-gray-100 hover:bg-gray-50 rounded-full shadow-sm transition-all hover:shadow-md" title={t('apple_login')}>
+                                <Apple className="w-6 h-6 text-gray-900" />
                             </button>
                         </div>
                     </div>
 
-                    <p className="mt-8 text-center text-sm text-slate-400">
-                        {isLogin ? t('no_account') : t('has_account')}{' '}
-                        <button
-                            onClick={() => setIsLogin(!isLogin)}
-                            className="text-violet-400 hover:text-violet-300 font-medium transition-colors"
-                        >
-                            {isLogin ? t('register_btn') : t('login_btn')}
-                        </button>
-                    </p>
+                    <div className="mt-8 text-center">
+                        <p className="text-sm text-gray-400">
+                            {isLogin ? t('no_account') : t('has_account')}
+                            <button
+                                onClick={() => setIsLogin(!isLogin)}
+                                className="ml-2 text-note-purple font-bold hover:underline transition-all"
+                            >
+                                {isLogin ? t('register_btn') : t('login_btn')}
+                            </button>
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
