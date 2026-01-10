@@ -29,9 +29,6 @@ const Landing = () => {
                 </p>
 
                 <div className="flex gap-4 justify-center">
-                    <button className="bg-violet-600 hover:bg-violet-700 text-white px-8 py-3 rounded-full font-medium transition-all transform hover:scale-105">
-                        {t('start')}
-                    </button>
                     <button
                         onClick={() => navigate('/connexion')}
                         className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-full font-medium transition-all"

@@ -48,7 +48,7 @@ export const AuthProvider = ({ children }) => {
                 .from('profiles')
                 .select('*')
                 .eq('id', authUser.id)
-                .single();
+                .maybeSingle(); // Prevents 406 error if profile is missing
 
             const { data, error } = await Promise.race([dbQuery, timeoutPromise]);
 
