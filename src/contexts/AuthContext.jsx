@@ -8,36 +8,6 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [showBypass, setShowBypass] = useState(false);
 
-    useEffect(() => {
-        let mounted = true;
-
-        // Safety Timeout (10s)
-        const maxWait = setTimeout(() => {
-            if (mounted && loading) {
-                console.warn("Auth initialization timed out.");
-                setShowBypass(true);
-            }
-        }, 10000);
-
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (session?.user) {
-                if (mounted) await fetchProfile(session.user);
-            } else {
-                if (mounted) {
-                    setUser(null);
-                    setLoading(false);
-                }
-            }
-        });
-
-        return () => {
-            mounted = false;
-            clearTimeout(maxWait);
-            subscription.unsubscribe();
-        };
-    }, []);
-
     const fetchProfile = async (authUser) => {
         try {
             const timeoutPromise = new Promise((_, reject) =>
@@ -48,7 +18,7 @@ export const AuthProvider = ({ children }) => {
                 .from('profiles')
                 .select('*')
                 .eq('id', authUser.id)
-                .maybeSingle(); // Prevents 406 error if profile is missing
+                .maybeSingle();
 
             const { data, error } = await Promise.race([dbQuery, timeoutPromise]);
 
@@ -64,6 +34,52 @@ export const AuthProvider = ({ children }) => {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        let mounted = true;
+
+        // 1. Fast Path: Check session immediately
+        const initSession = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    if (mounted) await fetchProfile(session.user);
+                } else {
+                    if (mounted) setLoading(false);
+                }
+            } catch (e) {
+                console.error("Init session failed", e);
+                if (mounted) setLoading(false);
+            }
+        };
+        initSession();
+
+        // 2. Safety Timeout
+        const maxWait = setTimeout(() => {
+            if (mounted && loading) {
+                console.warn("Auth initialization timed out.");
+                setShowBypass(true);
+            }
+        }, 10000);
+
+        // 3. Listener for updates
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session?.user && !user) {
+                if (mounted) await fetchProfile(session.user);
+            } else if (event === 'SIGNED_OUT') {
+                if (mounted) {
+                    setUser(null);
+                    setLoading(false);
+                }
+            }
+        });
+
+        return () => {
+            mounted = false;
+            clearTimeout(maxWait);
+            subscription.unsubscribe();
+        };
+    }, []);
 
     const login = async (email, password) => {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -91,13 +107,13 @@ export const AuthProvider = ({ children }) => {
     return (
         <AuthContext.Provider value={{ user, login, signup, logout }}>
             {loading ? (
-                <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white font-sans">
+                <div className="min-h-screen flex items-center justify-center bg-white text-gray-900 font-sans">
                     <div className="flex flex-col items-center">
                         <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="text-slate-400">Chargement...</p>
+                        <p className="text-gray-500 text-sm">Chargement...</p>
                         {showBypass && (
-                            <button onClick={() => setLoading(false)} className="mt-4 text-sm text-red-400 underline">
-                                Forcer l'accès
+                            <button onClick={() => setLoading(false)} className="mt-4 text-xs text-red-400 underline hover:text-red-500 cursor-pointer">
+                                Forcer l'accès (Réseau lent)
                             </button>
                         )}
                     </div>
