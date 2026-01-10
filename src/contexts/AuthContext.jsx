@@ -106,20 +106,10 @@ export const AuthProvider = ({ children }) => {
 
     return (
         <AuthContext.Provider value={{ user, login, signup, logout }}>
-            {loading ? (
-                <div className="min-h-screen flex items-center justify-center bg-white text-gray-900 font-sans">
-                    <div className="flex flex-col items-center">
-                        <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="text-gray-500 text-sm">Chargement...</p>
-                        {showBypass && (
-                            <button onClick={() => setLoading(false)} className="mt-4 text-xs text-red-400 underline hover:text-red-500 cursor-pointer">
-                                Forcer l'accès (Réseau lent)
-                            </button>
-                        )}
-                    </div>
-                </div>
-            ) : children}
+            children
+            )}
         </AuthContext.Provider>
+        </AuthContext.Provider >
     );
 };
 
