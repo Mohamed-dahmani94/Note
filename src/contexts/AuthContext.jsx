@@ -33,21 +33,38 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const fetchProfile = async (authUser) => {
+        console.log("Fetching profile for:", authUser.id);
         try {
-            const { data, error } = await supabase
+            // Create a promise that rejects after 2 seconds
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Profile fetch timeout")), 2000)
+            );
+
+            // Race between DB query and timeout
+            const dbQuery = supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', authUser.id)
                 .single();
 
+            const { data, error } = await Promise.race([dbQuery, timeoutPromise]);
+
+            if (error) throw error;
+
+            console.log("Profile data received:", data);
+
             if (data) {
-                setUser({ ...authUser, ...data }); // Merge Auth data + Profile data (role)
+                setUser({ ...authUser, ...data });
             } else {
-                setUser(authUser);
+                setUser({ ...authUser, role: 'author' }); // Default role if profile missing
             }
         } catch (error) {
-            console.error('Error fetching profile:', error);
+            console.error('Error fetching profile (or timeout):', error);
+            // Fallback: Set user anyway so app loads (default to basic user)
+            // Critical: Ensure role exists to prevent routing issues
+            setUser({ ...authUser, role: 'author' });
         } finally {
+            console.log("Turning off loading...");
             setLoading(false);
         }
     };
