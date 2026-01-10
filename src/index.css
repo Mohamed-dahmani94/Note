@@ -1,48 +1,67 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&family=Montserrat:wght@400;700&display=swap');
+@import "tailwindcss";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@theme {
+    --color-note-purple: #9274AC;
+    --color-deep-black: #1A1A1A;
+    --color-pure-white: #FFFFFF;
+    --color-body-gray: #4A4A4A;
+    --color-soft-gray: #F8F9FA;
 
-:root {
-    --note-purple: #9274AC;
-    --deep-black: #1A1A1A;
-    --pure-white: #FFFFFF;
-    --body-gray: #4A4A4A;
-    --soft-gray: #F8F9FA;
+    --font-sans: 'Montserrat', 'Cairo', sans-serif;
+    --font-cairo: 'Cairo', sans-serif;
+
+    --animate-blob: blob 7s infinite;
+
+    @keyframes blob {
+        0% {
+            transform: translate(0px, 0px) scale(1);
+        }
+
+        33% {
+            transform: translate(30px, -50px) scale(1.1);
+        }
+
+        66% {
+            transform: translate(-20px, 20px) scale(0.9);
+        }
+
+        100% {
+            transform: translate(0px, 0px) scale(1);
+        }
+    }
 }
 
+/* Custom Utilities for things not covered by theme map if needed, 
+   but v4 maps --color-* to bg-*, text-*, etc. automatically */
+
+/* Global Styles */
 body {
-    background-color: var(--pure-white);
-    color: var(--deep-black);
+    background-color: var(--color-pure-white);
+    color: var(--color-deep-black);
+    font-family: var(--font-sans);
 }
 
-/* Typography Defaults */
 body[dir="rtl"] {
-    font-family: 'Cairo', sans-serif;
+    font-family: var(--font-cairo);
 }
 
-body[dir="ltr"] {
-    font-family: 'Montserrat', sans-serif;
-}
-
-/* Custom Utilities */
+/* Helper classes that map to the theme variables */
 .text-note-purple {
-    color: var(--note-purple);
+    color: var(--color-note-purple);
 }
 
 .bg-note-purple {
-    background-color: var(--note-purple);
+    background-color: var(--color-note-purple);
 }
 
 .border-note-purple {
-    border-color: var(--note-purple);
+    border-color: var(--color-note-purple);
 }
 
 .text-deep-black {
-    color: var(--deep-black);
+    color: var(--color-deep-black);
 }
 
 .bg-deep-black {
-    background-color: var(--deep-black);
+    background-color: var(--color-deep-black);
 }
