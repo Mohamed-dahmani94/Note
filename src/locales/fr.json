@@ -17,5 +17,13 @@
     "no_account": "Pas encore de compte ?",
     "has_account": "Déjà un compte ?",
     "forgot_password": "Mot de passe oublié ?",
-    "or": "OU"
+    "or": "OU",
+    "become_writer": "Devenez écrivain",
+    "contact_us": "Contactez-nous",
+    "menu_home": "Accueil",
+    "menu_books": "Livres",
+    "menu_about": "À propos",
+    "hero_title": "Transformez votre manuscrit en réalité",
+    "hero_subtitle": "Vos idées méritent de devenir un chef-d'œuvre",
+    "footer_text": "Note Publishing - Algérie"
 }

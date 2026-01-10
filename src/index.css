@@ -1,3 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&family=Montserrat:wght@400;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+    --note-purple: #9274AC;
+    --deep-black: #1A1A1A;
+    --pure-white: #FFFFFF;
+    --body-gray: #4A4A4A;
+    --soft-gray: #F8F9FA;
+}
+
+body {
+    background-color: var(--pure-white);
+    color: var(--deep-black);
+}
+
+/* Typography Defaults */
+body[dir="rtl"] {
+    font-family: 'Cairo', sans-serif;
+}
+
+body[dir="ltr"] {
+    font-family: 'Montserrat', sans-serif;
+}
+
+/* Custom Utilities */
+.text-note-purple {
+    color: var(--note-purple);
+}
+
+.bg-note-purple {
+    background-color: var(--note-purple);
+}
+
+.border-note-purple {
+    border-color: var(--note-purple);
+}
+
+.text-deep-black {
+    color: var(--deep-black);
+}
+
+.bg-deep-black {
+    background-color: var(--deep-black);
+}
