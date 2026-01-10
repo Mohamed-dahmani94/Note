@@ -35,9 +35,9 @@ export const AuthProvider = ({ children }) => {
     const fetchProfile = async (authUser) => {
         console.log("Fetching profile for:", authUser.id);
         try {
-            // Create a promise that rejects after 2 seconds
+            // Create a promise that rejects after 10 seconds (gives more time for cold starts/slow networks)
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("Profile fetch timeout")), 2000)
+                setTimeout(() => reject(new Error("Profile fetch timeout")), 10000)
             );
 
             // Race between DB query and timeout
