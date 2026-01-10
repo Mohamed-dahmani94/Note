@@ -1,0 +1,21 @@
+{
+    "welcome": "Bienvenue sur Note Publishing",
+    "subtitle": "La première plateforme d'édition numérique en Algérie",
+    "start": "Commencer",
+    "login": "Connexion",
+    "language_select": "Langue",
+    "loading": "Chargement...",
+    "direction": "ltr",
+    "email": "Adresse Email",
+    "password": "Mot de passe",
+    "full_name": "Nom complet",
+    "login_btn": "Se connecter",
+    "register_btn": "Créer un compte",
+    "google_login": "Continuer avec Google",
+    "facebook_login": "Continuer avec Facebook",
+    "apple_login": "Continuer avec Apple",
+    "no_account": "Pas encore de compte ?",
+    "has_account": "Déjà un compte ?",
+    "forgot_password": "Mot de passe oublié ?",
+    "or": "OU"
+}

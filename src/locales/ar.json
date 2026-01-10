@@ -1,0 +1,21 @@
+{
+    "welcome": "مرحباً بكم في نوت للنشر",
+    "subtitle": "أول منصة نشر رقمي في الجزائر",
+    "start": "ابدأ الآن",
+    "login": "تسجيل الدخول",
+    "language_select": "اللغة",
+    "loading": "جار التحميل...",
+    "direction": "rtl",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "full_name": "الاسم الكامل",
+    "login_btn": "تسجيل الدخول",
+    "register_btn": "إنشاء حساب",
+    "google_login": "المتابعة باستخدام Google",
+    "facebook_login": "المتابعة باستخدام Facebook",
+    "apple_login": "المتابعة باستخدام Apple",
+    "no_account": "ليس لديك حساب؟",
+    "has_account": "لديك حساب بالفعل؟",
+    "forgot_password": "نسيت كلمة المرور؟",
+    "or": "أو"
+}
