@@ -6,10 +6,10 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [showBypass, setShowBypass] = useState(false);
 
     const fetchProfile = async (authUser) => {
         try {
+            // Short timeout (3s) for better perceived performance
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error("Profile fetch timeout")), 3000)
             );
@@ -29,6 +29,7 @@ export const AuthProvider = ({ children }) => {
             }
         } catch (error) {
             console.error('Error fetching profile:', error);
+            // Fallback to minimal user content to allow access
             setUser({ ...authUser, role: 'author' });
         } finally {
             setLoading(false);
@@ -38,7 +39,7 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         let mounted = true;
 
-        // 1. Fast Path: Check session immediately
+        // 1. Fast Path
         const initSession = async () => {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
@@ -54,15 +55,7 @@ export const AuthProvider = ({ children }) => {
         };
         initSession();
 
-        // 2. Safety Timeout
-        const maxWait = setTimeout(() => {
-            if (mounted && loading) {
-                console.warn("Auth initialization timed out.");
-                setShowBypass(true);
-            }
-        }, 10000);
-
-        // 3. Listener for updates
+        // 2. Auth State Listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_IN' && session?.user && !user) {
                 if (mounted) await fetchProfile(session.user);
@@ -76,7 +69,6 @@ export const AuthProvider = ({ children }) => {
 
         return () => {
             mounted = false;
-            clearTimeout(maxWait);
             subscription.unsubscribe();
         };
     }, []);
@@ -106,10 +98,8 @@ export const AuthProvider = ({ children }) => {
 
     return (
         <AuthContext.Provider value={{ user, login, signup, logout }}>
-            children
-            )}
+            {children}
         </AuthContext.Provider>
-        </AuthContext.Provider >
     );
 };
 
