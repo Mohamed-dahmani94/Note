@@ -15,6 +15,7 @@ import PublicationForm from './pages/admin/PublicationForm';
 import AuthorLayout from './components/layouts/AuthorLayout';
 import AuthorRoute from './components/auth/AuthorRoute';
 import AuthorDashboard from './pages/author/AuthorDashboard';
+import AuthorContentManager from './pages/author/AuthorContentManager';
 import ProfilePage from './pages/common/ProfilePage';
 
 function App() {
@@ -58,7 +59,7 @@ function App() {
                             </AuthorRoute>
                         }>
                             <Route index element={<AuthorDashboard />} />
-                            <Route path="content" element={<ContentManager />} />
+                            <Route path="content" element={<AuthorContentManager />} />
                             {/* We reuse ContentManager but we need to make sure it filters by user. 
                                 Actually ContentManager queries ALL. We need to tweak ContentManager to respect RLS or filter by user if author.
                                 Thanks to RLS "Authors can view own", ContentManager will naturally only return own rows! 
