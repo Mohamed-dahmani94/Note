@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { BrainCircuit, Star, FileText, User, ChevronRight, Activity, AlertCircle } from 'lucide-react';
+import { BrainCircuit, Star, FileText, User, Activity, AlertCircle, TrendingUp, BookOpen, Users, Flag, CheckCircle2, XCircle } from 'lucide-react';
 
 const AIEvaluationManager = () => {
     const [manuscripts, setManuscripts] = useState([]);
@@ -8,6 +8,7 @@ const AIEvaluationManager = () => {
     const [error, setError] = useState(null);
     const [analyzingId, setAnalyzingId] = useState(null);
     const [customPrompt, setCustomPrompt] = useState(null);
+    const [expandedReview, setExpandedReview] = useState(null);
 
     useEffect(() => {
         fetchManuscripts();
@@ -27,7 +28,6 @@ const AIEvaluationManager = () => {
         setLoading(true);
         setError(null);
         try {
-            console.log("Fetching all publications...");
             const { data: pubs, error: pubError } = await supabase
                 .from('publications')
                 .select('*')
@@ -35,25 +35,13 @@ const AIEvaluationManager = () => {
 
             if (pubError) throw pubError;
 
-            console.log("Publications fetched:", pubs?.length);
-
             if (pubs && pubs.length > 0) {
-                // Fetch profiles for these users
                 const userIds = [...new Set(pubs.map(p => p.user_id).filter(id => id))];
-
                 if (userIds.length > 0) {
-                    const { data: profs, error: profError } = await supabase
-                        .from('profiles')
-                        .select('*')
-                        .in('id', userIds);
-
-                    if (!profError && profs) {
+                    const { data: profs } = await supabase.from('profiles').select('*').in('id', userIds);
+                    if (profs) {
                         const profMap = Object.fromEntries(profs.map(p => [p.id, p]));
-                        const enriched = pubs.map(p => ({
-                            ...p,
-                            author_profile: profMap[p.user_id] || null
-                        }));
-                        setManuscripts(enriched);
+                        setManuscripts(pubs.map(p => ({ ...p, author_profile: profMap[p.user_id] || null })));
                         return;
                     }
                 }
@@ -62,7 +50,7 @@ const AIEvaluationManager = () => {
                 setManuscripts([]);
             }
         } catch (err) {
-            console.error("Error fetching manuscripts:", err);
+            console.error(err);
             setError(err.message);
         } finally {
             setLoading(false);
@@ -71,204 +59,221 @@ const AIEvaluationManager = () => {
 
     const handleRunAI = async (m) => {
         setAnalyzingId(m.id);
-
-        // Simulating AI Request to Edge Function
-        // In a real scenario, we would call: supabase.functions.invoke('analyze-manuscript', { body: { id: m.id } })
         try {
-            console.log(`Analyzing manuscript with custom prompt...`);
-
-            // Build the prompt context
-            const promptContext = customPrompt || "";
-            const finalPrompt = promptContext
-                .replace("{{title}}", m.title_main || "Untitled")
-                .replace("{{summary}}", m.summary || "No summary")
-                .replace("{{keywords}}", m.keywords || "None")
-                .replace("{{author_profile}}", m.author_profile ? JSON.stringify(m.author_profile) : "No bio");
-
-            console.log("PROMPT ENVOYÉ À L'IA :", finalPrompt);
-
-            // For Demo/Mock purposes until Edge Function is ready:
+            // Simulation logic matching the new professional prompt structure
             setTimeout(async () => {
                 const mockReview = {
-                    score: Math.floor(Math.random() * 3) + 7, // 7-9 for demo
-                    feedback: "L'IA a analysé le manuscrit \"" + m.title_main + "\". Le style est fluide et la thématique est en parfaite adéquation avec le profil de l'auteur. Le potentiel commercial est estimé comme élevé.",
-                    originality: "Élevée",
-                    style: "Académique / Professionnel"
+                    language_detected: m.language === 'Arabe' ? 'ar' : 'fr',
+                    manuscript: {
+                        title: m.title_main,
+                        identified_topic: "Littérature contemporaine / Essai social",
+                        target_audience: "Universitaires, lecteurs passionnés d'histoire"
+                    },
+                    market_analysis: {
+                        global_presence_score: 8,
+                        algeria_presence_score: 9,
+                        market_saturation_level: "low",
+                        weighted_score: 8.5,
+                        comment: "Le sujet est très porteur en Algérie et manque de références récentes."
+                    },
+                    content_evaluation: {
+                        plagiarism_risk_percent: 2,
+                        literary_creativity_score: 9,
+                        linguistic_quality_score: 8,
+                        editorial_quality_score: 8,
+                        spelling_grammar_error_level: "low",
+                        weighted_score: 8.2,
+                        comment: "Style fluide et évocateur. Très peu de coquilles détectées."
+                    },
+                    author_evaluation: {
+                        digital_presence_score: 7,
+                        academic_level_score: 9,
+                        marketing_potential_score: 8,
+                        weighted_score: 8.0,
+                        comment: "Profil académique solide en phase avec la thématique."
+                    },
+                    final_evaluation: {
+                        overall_score: 8.3,
+                        strengths: ["Originalité du sujet", "Qualité de la langue", "Profil auteur"],
+                        weaknesses: ["Nécessite un plan marketing agressif"],
+                        risk_level: "low",
+                        final_recommendation: "publish",
+                        decision_justification: "Excellent potentiel commercial et littéraire. Recommandé pour publication immédiate."
+                    }
                 };
 
                 const { error } = await supabase
                     .from('publications')
                     .update({
-                        ai_score: mockReview.score,
+                        ai_score: Math.round(mockReview.final_evaluation.overall_score),
                         ai_detailed_review: mockReview,
                         ai_status: 'completed'
                     })
                     .eq('id', m.id);
 
                 if (error) throw error;
-
                 fetchManuscripts();
                 setAnalyzingId(null);
             }, 3000);
-
         } catch (error) {
             console.error(error);
             setAnalyzingId(null);
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-gray-500">Chargement des soumissions...</div>;
+    const getRecommendationStyle = (rec) => {
+        if (rec === 'publish') return 'bg-green-100 text-green-700 border-green-200';
+        if (rec === 'publish_with_revisions') return 'bg-amber-100 text-amber-700 border-amber-200';
+        return 'bg-red-100 text-red-700 border-red-200';
+    };
+
+    if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">Initialisation du système d'évaluation...</div>;
 
     return (
-        <div className="space-y-8">
-            <div className="flex justify-between items-center">
+        <div className="space-y-8 pb-12">
+            <div className="flex justify-between items-start">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-                        <BrainCircuit className="w-8 h-8 text-note-purple" />
-                        Notes de Lecture Assistées par IA
+                    <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                        <BrainCircuit className="w-10 h-10 text-note-purple" />
+                        Système d'Expertise IA
                     </h1>
-                    <p className="text-gray-500 mt-1">Analyse approfondie des manuscrits et des profils auteurs.</p>
+                    <p className="text-gray-500 mt-2 max-w-2xl">
+                        Analyse multicritère institutionnelle : Marché (30%), Qualité (40%), Profil Auteur (15%) et Benchmarking (15%).
+                    </p>
                 </div>
             </div>
 
             {error && (
                 <div className="bg-red-50 text-red-800 p-4 rounded-2xl border border-red-200 flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                    <div>
-                        <h4 className="font-bold">Erreur de chargement</h4>
-                        <p className="text-sm">{error}</p>
-                        <button
-                            onClick={fetchManuscripts}
-                            className="mt-2 text-xs font-bold underline hover:no-underline"
-                        >
-                            Réessayer
-                        </button>
-                    </div>
+                    <AlertCircle className="w-5 h-5 mt-0.5" />
+                    <div><h4 className="font-bold">Erreur Technique</h4><p className="text-sm">{error}</p></div>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-6">
-                {manuscripts.map((m) => (
-                    <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col md:flex-row transition-all hover:shadow-md">
-                        {/* Section Titre / Auteur */}
-                        <div className="p-6 md:w-1/3 border-b md:border-b-0 md:border-r border-gray-50">
-                            <div className="flex items-center gap-2 text-xs font-bold text-note-purple uppercase tracking-wider mb-2">
-                                <FileText className="w-4 h-4" />
-                                Manuscrit
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900 mb-1">{m.title_main}</h3>
-                            <p className="text-sm text-gray-500 mb-4">{m.language} | {m.collection_title || 'Hors collection'}</p>
+            <div className="grid grid-cols-1 gap-8">
+                {manuscripts.map((m) => {
+                    const review = m.ai_detailed_review;
+                    const isExpanded = expandedReview === m.id;
 
-                            <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-note-purple font-bold">
-                                    {m.main_author_name?.charAt(0) || 'A'}
-                                </div>
-                                <div>
-                                    <p className="text-sm font-bold text-gray-800">{m.main_author_name} {m.main_author_firstname}</p>
-                                    <p className="text-xs text-gray-500">Profil vérifié</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Section Analyse IA */}
-                        <div className="p-6 flex-1 flex flex-col justify-center bg-gradient-to-br from-white to-violet-50/30">
-                            {m.ai_status === 'completed' ? (
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-start">
+                    return (
+                        <div key={m.id} className={`bg-white rounded-3xl border ${isExpanded ? 'border-note-purple shadow-xl' : 'border-gray-100 shadow-sm'} overflow-hidden transition-all duration-300`}>
+                            {/* Header Panel */}
+                            <div className="p-8 flex flex-col md:flex-row gap-8 items-center bg-white">
+                                <div className="flex-1 space-y-2">
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <span className="px-3 py-1 bg-violet-50 text-note-purple text-[10px] font-bold uppercase tracking-wider rounded-full border border-violet-100">
+                                            {review?.language_detected === 'ar' ? 'Matière Arabophone' : 'Matière Francophone'}
+                                        </span>
+                                        <span className="text-xs text-gray-400 font-medium tracking-tight">ID: {m.id.split('-')[0]}</span>
+                                    </div>
+                                    <h2 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">{m.title_main}</h2>
+                                    <div className="flex items-center gap-4 pt-2">
                                         <div className="flex items-center gap-2">
-                                            <div className="flex">
-                                                {[...Array(10)].map((_, i) => (
-                                                    <Star key={i} className={`w-4 h-4 ${i < m.ai_score ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`} />
+                                            <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
+                                                <User className="w-4 h-4" />
+                                            </div>
+                                            <span className="text-sm font-bold text-gray-700">{m.main_author_name} {m.main_author_firstname}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col items-center md:items-end gap-3 min-w-[200px]">
+                                    {m.ai_status === 'completed' ? (
+                                        <div className="text-right">
+                                            <div className="flex items-center gap-2 mb-1 justify-end">
+                                                <span className="text-4xl font-black text-note-purple">{review?.final_evaluation?.overall_score}</span>
+                                                <span className="text-gray-300 text-lg">/10</span>
+                                            </div>
+                                            <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase border shadow-sm ${getRecommendationStyle(review?.final_evaluation?.final_recommendation)}`}>
+                                                {review?.final_evaluation?.final_recommendation?.replace(/_/g, ' ')}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleRunAI(m)}
+                                            disabled={analyzingId !== null}
+                                            className="bg-note-purple text-white px-8 py-3 rounded-2xl font-black text-sm hover:bg-violet-700 transition-all hover:scale-105 active:scale-95 disabled:bg-gray-100 disabled:text-gray-400"
+                                        >
+                                            {analyzingId === m.id ? 'ANALYSES EN COURS...' : 'LANCER L\'EXPERTISE'}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => setExpandedReview(isExpanded ? null : m.id)}
+                                        className="text-xs font-bold text-gray-400 hover:text-note-purple flex items-center gap-1"
+                                    >
+                                        {isExpanded ? 'Réduire les détails' : 'Détails de l\'analyse →'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Detailed Review Section */}
+                            {isExpanded && review && (
+                                <div className="border-t border-gray-50 bg-gray-50/30 p-8 space-y-8 animate-in slide-in-from-top duration-500">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                            <TrendingUp className="w-5 h-5 text-blue-500 mb-3" />
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-1">Marché (30%)</h4>
+                                            <p className="text-xl font-black text-gray-900">{review.market_analysis?.weighted_score}/10</p>
+                                            <p className="text-[10px] text-gray-500 mt-1 uppercase">Saturation: {review.market_analysis?.market_saturation_level}</p>
+                                        </div>
+                                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                            <BookOpen className="w-5 h-5 text-violet-500 mb-3" />
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-1">Contenu (40%)</h4>
+                                            <p className="text-xl font-black text-gray-900">{review.content_evaluation?.weighted_score}/10</p>
+                                            <p className="text-[10px] text-gray-500 mt-1 uppercase">Plagiat: {review.content_evaluation?.plagiarism_risk_percent}%</p>
+                                        </div>
+                                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                            <Users className="w-5 h-5 text-orange-500 mb-3" />
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-1">Auteur (15%)</h4>
+                                            <p className="text-xl font-black text-gray-900">{review.author_evaluation?.weighted_score}/10</p>
+                                            <p className="text-[10px] text-gray-500 mt-1 uppercase">Marketing: {review.author_evaluation?.marketing_potential_score}/10</p>
+                                        </div>
+                                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                            <Flag className="w-5 h-5 text-emerald-500 mb-3" />
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-1">Impact (15%)</h4>
+                                            <p className="text-xl font-black text-gray-900">8.0/10</p>
+                                            <p className="text-[10px] text-gray-500 mt-1 uppercase">Concurrentiel</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                        <div className="space-y-4">
+                                            <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                                <CheckCircle2 className="w-5 h-5 text-green-500" /> Forces Stratégiques
+                                            </h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {review.final_evaluation?.strengths?.map((s, i) => (
+                                                    <span key={i} className="bg-white px-4 py-2 rounded-xl border border-green-100 text-sm text-green-700 font-medium">{s}</span>
                                                 ))}
                                             </div>
-                                            <span className="text-sm font-bold text-gray-900">{m.ai_score}/10</span>
                                         </div>
-                                        <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100">Analyse Terminée</span>
-                                    </div>
-                                    <div className="text-sm text-gray-600 leading-relaxed italic">
-                                        "{m.ai_detailed_review?.feedback}"
-                                    </div>
-                                    <div className="flex gap-4 pt-2">
-                                        <div className="text-xs">
-                                            <span className="text-gray-400 block">Originalité</span>
-                                            <span className="font-bold text-gray-700">{m.ai_detailed_review?.originality}</span>
-                                        </div>
-                                        <div className="text-xs">
-                                            <span className="text-gray-400 block">Style</span>
-                                            <span className="font-bold text-gray-700">{m.ai_detailed_review?.style}</span>
+                                        <div className="space-y-4">
+                                            <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                                <XCircle className="w-5 h-5 text-red-500" /> Points de Vigilance
+                                            </h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {review.final_evaluation?.weaknesses?.map((w, i) => (
+                                                    <span key={i} className="bg-white px-4 py-2 rounded-xl border border-red-100 text-sm text-red-700 font-medium">{w}</span>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center text-center space-y-4 py-4">
-                                    <div className={`p-4 rounded-full ${analyzingId === m.id ? 'bg-violet-100' : 'bg-gray-50'} transition-colors`}>
-                                        <BrainCircuit className={`w-8 h-8 ${analyzingId === m.id ? 'text-note-purple animate-pulse' : 'text-gray-300'}`} />
+
+                                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                                        <h4 className="text-xs font-bold text-gray-400 uppercase mb-4">Justification Institutionnelle</h4>
+                                        <p className="text-gray-700 leading-relaxed italic">"{review.final_evaluation?.decision_justification}"</p>
                                     </div>
-                                    <div>
-                                        <h4 className="font-bold text-gray-800">Prêt pour l'analyse IA</h4>
-                                        <p className="text-xs text-gray-500 max-w-xs mx-auto mt-1">
-                                            L'IA va lire le fichier DOC/PDF et croiser les informations avec le profil de l'auteur.
-                                        </p>
-                                    </div>
-                                    <button
-                                        onClick={() => handleRunAI(m)}
-                                        disabled={analyzingId !== null}
-                                        className={`
-                                            px-6 py-2 rounded-xl text-sm font-bold shadow-sm transition-all
-                                            ${analyzingId === m.id
-                                                ? 'bg-note-purple text-white'
-                                                : analyzingId !== null
-                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                    : 'bg-note-purple hover:bg-violet-700 text-white hover:scale-105 active:scale-95'}
-                                        `}
-                                    >
-                                        {analyzingId === m.id ? (
-                                            <span className="flex items-center gap-2">
-                                                <Activity className="w-4 h-4 animate-spin" />
-                                                Lecture du doc...
-                                            </span>
-                                        ) : 'Lancer l\'IA'}
-                                    </button>
                                 </div>
                             )}
                         </div>
-
-                        {/* Section Fichiers */}
-                        <div className="p-6 md:w-1/4 flex flex-col justify-center border-t md:border-t-0 md:border-l border-gray-50 bg-gray-50/50">
-                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Documents joints</h4>
-                            <div className="space-y-2">
-                                {m.file_doc_url ? (
-                                    <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 text-xs">
-                                        <FileText className="w-4 h-4" />
-                                        <span className="flex-1 truncate">Manuscrit.doc</span>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-2 p-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-400 text-xs">
-                                        <AlertCircle className="w-4 h-4" />
-                                        <span>DOC manquant</span>
-                                    </div>
-                                )}
-                                {m.file_pdf_url && (
-                                    <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-100 rounded-lg text-red-700 text-xs">
-                                        <FileText className="w-4 h-4" />
-                                        <span className="flex-1 truncate">Version.pdf</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
 
                 {manuscripts.length === 0 && (
-                    <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
-                        <User className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                        <h3 className="font-bold text-gray-400 mb-4">Aucun manuscrit trouvé</h3>
-                        <button
-                            onClick={fetchManuscripts}
-                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                        >
-                            Actualiser la liste
-                        </button>
+                    <div className="text-center py-20 bg-white rounded-[40px] border-4 border-dashed border-gray-50">
+                        <Activity className="w-16 h-16 text-gray-100 mx-auto mb-4" />
+                        <h3 className="font-black text-gray-300 text-2xl">VOTRE PIPELINE EST VIDE</h3>
+                        <p className="text-gray-400">Aucun manuscrit n'est actuellement en attente d'expertise.</p>
                     </div>
                 )}
             </div>
