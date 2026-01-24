@@ -171,10 +171,53 @@ const PublicationForm = () => {
     };
 
     const handleRequestValidation = async () => {
-        if (!confirm("Une fois la demande envoyée, vous ne pourrez plus modifier le manuscrit. Continuer ?")) return;
-
         setLoading(true);
+
         try {
+            // 1. Check if profile is complete
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('full_name, birth_date, birth_place, nationality, id_card_number, id_card_type, address, phone')
+                .eq('id', user.id)
+                .single();
+
+            if (profileError) throw profileError;
+
+            // 2. Validate required fields
+            const requiredFields = {
+                'Nom complet': profile.full_name,
+                'Date de naissance': profile.birth_date,
+                'Lieu de naissance': profile.birth_place,
+                'Nationalité': profile.nationality,
+                'Numéro de pièce d\'identité': profile.id_card_number,
+                'Type de pièce d\'identité': profile.id_card_type,
+                'Adresse': profile.address,
+                'Téléphone': profile.phone
+            };
+
+            const missingFields = Object.entries(requiredFields)
+                .filter(([_, value]) => !value || value.trim() === '')
+                .map(([field, _]) => field);
+
+            if (missingFields.length > 0) {
+                setLoading(false);
+                const fieldsList = missingFields.join(', ');
+                alert(
+                    `⚠️ Profil incomplet !\n\n` +
+                    `Avant de soumettre votre manuscrit pour validation, vous devez compléter les informations suivantes :\n\n` +
+                    `${fieldsList}\n\n` +
+                    `Vous allez être redirigé vers votre profil.`
+                );
+                navigate('/author/profile');
+                return;
+            }
+
+            // 3. If profile is complete, proceed with validation request
+            if (!confirm("Une fois la demande envoyée, vous ne pourrez plus modifier le manuscrit. Continuer ?")) {
+                setLoading(false);
+                return;
+            }
+
             const updates = {
                 position: 'en attente',
                 date_validation_request: new Date().toISOString()
@@ -187,7 +230,7 @@ const PublicationForm = () => {
 
             if (error) throw error;
 
-            alert("Demande de validation envoyée !");
+            alert("✅ Demande de validation envoyée avec succès !");
             navigate('/author');
 
         } catch (err) {
@@ -298,7 +341,7 @@ const PublicationForm = () => {
                     <div className="space-y-4">
 
                         {/* Editor */}
-                        <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                             <label className="font-bold text-gray-700">Éditeur</label>
                             <input
                                 name="editor_name"
@@ -310,7 +353,7 @@ const PublicationForm = () => {
                         </div>
 
                         {/* Titles */}
-                        <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                             <label className="font-bold text-gray-700">Titre Principal *</label>
                             <input
                                 name="title_main"
@@ -320,7 +363,7 @@ const PublicationForm = () => {
                                 className="w-full bg-white border-2 border-blue-500 rounded px-3 py-1.5 focus:outline-none"
                             />
                         </div>
-                        <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                             <label className="text-gray-500">Titre secondaire</label>
                             <input
                                 name="title_secondary"
@@ -329,7 +372,7 @@ const PublicationForm = () => {
                                 className="w-full bg-white border border-blue-300 rounded px-3 py-1.5"
                             />
                         </div>
-                        <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                             <label className="text-gray-500">Titre parallèle</label>
                             <input
                                 name="title_parallel"
@@ -340,7 +383,7 @@ const PublicationForm = () => {
                         </div>
 
                         {/* Language */}
-                        <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                             <label className="text-gray-500">Langue</label>
                             <select
                                 name="language"
@@ -356,7 +399,7 @@ const PublicationForm = () => {
 
                         {/* Publication Details */}
                         <div className="space-y-2 mt-4">
-                            <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                                 <label className="text-gray-500">Publication :</label>
                                 <div className="flex gap-4 items-center w-full">
                                     <span className="text-gray-500 w-16">Éditeur *</span>
@@ -368,7 +411,7 @@ const PublicationForm = () => {
                                     />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                                 <div></div> {/* Spacer */}
                                 <div className="flex gap-4 items-center w-full">
                                     <span className="text-gray-500 w-16">Lieu *</span>
@@ -382,7 +425,7 @@ const PublicationForm = () => {
                             </div>
 
                             {/* Second Publisher Line */}
-                            <div className="grid grid-cols-[120px_1fr] items-center gap-4 mt-2">
+                            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4 mt-2">
                                 <div></div> {/* Spacer */}
                                 <div className="flex gap-4 items-center w-full">
                                     <span className="text-gray-500 w-16">Éditeur</span>
@@ -394,7 +437,7 @@ const PublicationForm = () => {
                                     />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                                 <div></div> {/* Spacer */}
                                 <div className="flex gap-4 items-center w-full">
                                     <span className="text-gray-500 w-16">Lieu</span>
@@ -416,7 +459,7 @@ const PublicationForm = () => {
                         </div>
 
                         {/* Content Textareas */}
-                        <div className="grid grid-cols-[120px_1fr] gap-4 mt-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4 mt-4">
                             <label className="text-gray-500 mt-2">Sommaire *</label>
                             <textarea
                                 name="summary"
@@ -426,7 +469,7 @@ const PublicationForm = () => {
                                 className="w-full bg-white border border-blue-300 rounded px-3 py-2"
                             ></textarea>
                         </div>
-                        <div className="grid grid-cols-[120px_1fr] gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4">
                             <label className="text-gray-500 mt-2">Résumé *</label>
                             <textarea
                                 name="abstract"
@@ -436,7 +479,7 @@ const PublicationForm = () => {
                                 className="w-full bg-white border border-blue-300 rounded px-3 py-2"
                             ></textarea>
                         </div>
-                        <div className="grid grid-cols-[120px_1fr] gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4">
                             <label className="text-gray-500 mt-2">Mots Clés *</label>
                             <textarea
                                 name="keywords"
@@ -456,7 +499,7 @@ const PublicationForm = () => {
 
                             <div className="space-y-4">
                                 {/* DOC/DOCX */}
-                                <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                                <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                                     <label className="font-bold text-gray-700">Format Word</label>
                                     <div className="flex items-center gap-3">
                                         <input
@@ -484,7 +527,7 @@ const PublicationForm = () => {
                                 </div>
 
                                 {/* PDF */}
-                                <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                                <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                                     <label className="font-bold text-gray-700">Format PDF</label>
                                     <div className="flex items-center gap-3">
                                         <input
@@ -519,7 +562,7 @@ const PublicationForm = () => {
                     <div className="space-y-4 border-l pl-8 border-gray-100">
 
                         {/* ISBN */}
-                        <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                             <label className="font-bold text-gray-800">ISBN</label>
                             <input
                                 name="isbn"
@@ -533,7 +576,7 @@ const PublicationForm = () => {
                         The requirement says Author should not validate. Let's make it read-only or hidden.
                         Let's show it read-only for feedback.
                     */}
-                        <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                             <label className="font-bold text-gray-800">Position</label>
                             <input
                                 name="position"
@@ -576,7 +619,7 @@ const PublicationForm = () => {
                         </div>
 
                         {/* Collection */}
-                        <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
                             <label className="text-gray-500">Collection :</label>
                             <div className="w-full space-y-2">
                                 <div className="flex items-center gap-4">
@@ -601,7 +644,7 @@ const PublicationForm = () => {
                         </div>
 
                         {/* Authors */}
-                        <div className="grid grid-cols-[120px_1fr] gap-4 mt-6">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4 mt-6">
                             <label className="text-gray-500 mt-2">Auteur principal :</label>
                             <div className="w-full space-y-2">
                                 <div className="flex items-center gap-4">
@@ -626,7 +669,7 @@ const PublicationForm = () => {
                         </div>
 
                         {/* Second Author */}
-                        <div className="grid grid-cols-[120px_1fr] gap-4 mt-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4 mt-4">
                             <label className="text-gray-500 mt-2">Auteur :</label>
                             <div className="w-full space-y-2">
                                 <div className="flex items-center gap-4">
@@ -664,7 +707,7 @@ const PublicationForm = () => {
                         </div>
 
                         {/* Description */}
-                        <div className="grid grid-cols-[120px_1fr] gap-4 mt-8">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4 mt-8">
                             <label className="text-gray-500 mt-2">Description :</label>
                             <div className="w-full space-y-2">
                                 <div className="flex items-center gap-4">

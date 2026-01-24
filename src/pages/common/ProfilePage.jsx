@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabaseClient';
-import { Save, Upload, User, Briefcase, GraduationCap, Book, Globe } from 'lucide-react';
+import { Save, Upload, User, Briefcase, GraduationCap, Book, Globe, Key, Mail } from 'lucide-react';
 
 const ProfilePage = () => {
     const { user, fetchProfile } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [idFile, setIdFile] = useState(null);
+    const [passwordData, setPasswordData] = useState({
+        newPassword: '',
+        confirmPassword: ''
+    });
 
     const [formData, setFormData] = useState({
         full_name: '',
@@ -61,11 +65,15 @@ const ProfilePage = () => {
 
             if (error) throw error;
             if (data) {
-                // Merge data into default state to avoid null control issues
+                // Merge data and ensure no null values
+                const cleanData = Object.keys(data).reduce((acc, key) => {
+                    acc[key] = data[key] ?? '';
+                    return acc;
+                }, {});
+
                 setFormData(prev => ({
                     ...prev,
-                    ...data,
-                    // Ensure boolean is boolean
+                    ...cleanData,
                     has_published: data.has_published === true
                 }));
             }
@@ -82,6 +90,37 @@ const ProfilePage = () => {
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
+    };
+
+    const handlePasswordChange = (e) => {
+        const { name, value } = e.target;
+        setPasswordData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleChangePassword = async () => {
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            alert("Les mots de passe ne correspondent pas !");
+            return;
+        }
+
+        if (passwordData.newPassword.length < 6) {
+            alert("Le mot de passe doit contenir au moins 6 caractères !");
+            return;
+        }
+
+        try {
+            const { error } = await supabase.auth.updateUser({
+                password: passwordData.newPassword
+            });
+
+            if (error) throw error;
+
+            alert("Mot de passe modifié avec succès !");
+            setPasswordData({ newPassword: '', confirmPassword: '' });
+        } catch (err) {
+            console.error("Error updating password:", err);
+            alert("Erreur : " + err.message);
+        }
     };
 
     const handleFileChange = (e) => {
@@ -145,6 +184,68 @@ const ProfilePage = () => {
             <p className="text-gray-500 mb-8">Complétez vos informations pour finaliser votre dossier auteur.</p>
 
             <form onSubmit={handleSubmit} className="space-y-8">
+
+                {/* 0. PARAMÈTRES DU COMPTE */}
+                <section className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="flex items-center gap-3 mb-6 border-b pb-4">
+                        <div className="p-2 bg-green-50 text-green-600 rounded-lg"><Key className="w-5 h-5" /></div>
+                        <h2 className="text-xl font-bold text-gray-800">Paramètres du Compte</h2>
+                    </div>
+
+                    <div className="space-y-6">
+                        {/* Email (Read-only, display current) */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Email de connexion</label>
+                            <div className="flex items-center gap-3">
+                                <Mail className="w-5 h-5 text-gray-400" />
+                                <input
+                                    type="email"
+                                    value={user?.email || ''}
+                                    disabled
+                                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-gray-600 cursor-not-allowed"
+                                />
+                                <span className="text-xs text-gray-500">Non modifiable</span>
+                            </div>
+                        </div>
+
+                        {/* Password Change */}
+                        <div className="border-t pt-4">
+                            <h3 className="font-bold text-gray-800 mb-4">Changer le mot de passe</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nouveau mot de passe</label>
+                                    <input
+                                        type="password"
+                                        name="newPassword"
+                                        value={passwordData.newPassword}
+                                        onChange={handlePasswordChange}
+                                        placeholder="Au moins 6 caractères"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Confirmer le mot de passe</label>
+                                    <input
+                                        type="password"
+                                        name="confirmPassword"
+                                        value={passwordData.confirmPassword}
+                                        onChange={handlePasswordChange}
+                                        placeholder="Retapez le mot de passe"
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleChangePassword}
+                                disabled={!passwordData.newPassword || !passwordData.confirmPassword}
+                                className="mt-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                            >
+                                Mettre à jour le mot de passe
+                            </button>
+                        </div>
+                    </div>
+                </section>
 
                 {/* 1. INFORMATIONS PERSONNELLES */}
                 <section className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">

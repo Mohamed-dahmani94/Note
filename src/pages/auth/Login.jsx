@@ -48,8 +48,7 @@ const Login = () => {
                 const role = authUser.app_metadata?.role;
                 console.log("Login: Detected role:", role);
 
-                alert(`Connexion réussie ! Rôle: ${role || 'Aucun'}. Redirection...`);
-
+                // Redirect based on role (no alert popup)
                 if (role === 'admin') {
                     console.log("Login: Redirecting to /admin");
                     navigate('/admin');

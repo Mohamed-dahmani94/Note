@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Users, BookOpen, Clock, CheckCircle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import ProfileCompletionCard from '../../components/ProfileCompletionCard';
 
 const StatCard = ({ title, value, icon: Icon, color, trend }) => (
     <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
@@ -95,6 +96,9 @@ const DashboardHome = () => {
                 </p>
             </div>
 
+            {/* Profile Completion Card */}
+            <ProfileCompletionCard />
+
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {stats.map((stat, index) => (
@@ -150,8 +154,8 @@ const DashboardHome = () => {
                                         </div>
                                     </div>
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.position === 'validé' ? 'bg-green-50 text-green-600' :
-                                            p.position === 'en attente' ? 'bg-amber-50 text-amber-600' :
-                                                'bg-gray-100 text-gray-600'
+                                        p.position === 'en attente' ? 'bg-amber-50 text-amber-600' :
+                                            'bg-gray-100 text-gray-600'
                                         }`}>
                                         {p.position}
                                     </span>

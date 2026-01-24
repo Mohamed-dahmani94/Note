@@ -44,10 +44,21 @@ const AuthorLayout = () => {
                 `}
             >
                 <div className="h-full flex flex-col">
-                    <div className="h-16 flex items-center justify-center border-b border-gray-100">
+                    <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100">
                         <span className="text-xl font-bold text-note-purple">
                             {isSidebarOpen ? 'Espace Auteur' : 'A.'}
                         </span>
+                        <button
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+                            title={isSidebarOpen ? "Réduire" : "Agrandir"}
+                        >
+                            {isSidebarOpen ? (
+                                <Menu className="w-5 h-5 rotate-180" />
+                            ) : (
+                                <Menu className="w-5 h-5" />
+                            )}
+                        </button>
                     </div>
 
                     <nav className="flex-1 py-6 px-3 space-y-1">

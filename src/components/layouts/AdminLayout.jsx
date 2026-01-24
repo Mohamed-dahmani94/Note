@@ -47,11 +47,22 @@ const AdminLayout = () => {
                 `}
             >
                 <div className="h-full flex flex-col">
-                    {/* Logo Area */}
-                    <div className="h-16 flex items-center justify-center border-b border-gray-100">
+                    {/* Logo Area with Toggle Button */}
+                    <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100">
                         <span className="text-xl font-bold text-note-purple">
                             {isSidebarOpen ? 'Note.dz Admin' : 'N.'}
                         </span>
+                        <button
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+                            title={isSidebarOpen ? "Réduire" : "Agrandir"}
+                        >
+                            {isSidebarOpen ? (
+                                <X className="w-5 h-5" />
+                            ) : (
+                                <Menu className="w-5 h-5" />
+                            )}
+                        </button>
                     </div>
 
                     {/* Nav Links */}

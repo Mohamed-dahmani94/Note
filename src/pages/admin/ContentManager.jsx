@@ -108,75 +108,77 @@ const ContentManager = () => {
                 </div>
             )}
 
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                <table className="w-full text-left text-sm text-gray-600">
-                    <thead className="bg-gray-50 border-b border-gray-200 text-xs uppercase font-medium text-gray-500">
-                        <tr>
-                            <th className="px-6 py-4">Titre</th>
-                            <th className="px-6 py-4">Auteur</th>
-                            <th className="px-6 py-4">Collection</th>
-                            <th className="px-6 py-4">Statut</th>
-                            <th className="px-6 py-4 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {filteredManuscripts.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-gray-600 min-w-[600px]">
+                        <thead className="bg-gray-50 border-b border-gray-200 text-xs uppercase font-medium text-gray-500">
                             <tr>
-                                <td colSpan="5" className="px-6 py-12 text-center text-gray-400">
-                                    Aucune publication trouvée.
-                                </td>
+                                <th className="px-6 py-4">Titre</th>
+                                <th className="px-6 py-4">Auteur</th>
+                                <th className="px-6 py-4">Collection</th>
+                                <th className="px-6 py-4">Statut</th>
+                                <th className="px-6 py-4 text-right">Actions</th>
                             </tr>
-                        ) : (
-                            filteredManuscripts.map((m) => (
-                                <tr key={m.id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="font-medium text-gray-900">{m.title_main || 'Sans titre'}</div>
-                                        {m.title_secondary && <div className="text-xs text-gray-400">{m.title_secondary}</div>}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">
-                                                {(m.main_author_name || '?').charAt(0)}
-                                            </div>
-                                            <span className="truncate max-w-[150px]">
-                                                {m.main_author_name} {m.main_author_firstname}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-gray-500">
-                                        {m.collection_title || '-'}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <select
-                                            value={m.position || 'en saisie'}
-                                            onChange={(e) => handleUpdateStatus(m.id, e.target.value)}
-                                            className={`text-xs font-medium px-2 py-1 rounded-full border outline-none cursor-pointer ${m.position === 'validé' ? 'bg-green-50 text-green-700 border-green-100' :
-                                                    m.position === 'en attente' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                                        'bg-gray-50 text-gray-700 border-gray-200'
-                                                }`}
-                                        >
-                                            <option value="en saisie">En saisie</option>
-                                            <option value="en attente">Demande validation</option>
-                                            <option value="validé">Validé</option>
-                                            <option value="rejeté">Rejeté</option>
-                                        </select>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex justify-end gap-2">
-                                            <button
-                                                onClick={() => navigate(`/admin/content/${m.id}`)}
-                                                className="p-1 text-gray-400 hover:text-note-purple transition-colors"
-                                                title="Modifier"
-                                            >
-                                                <FileText className="w-4 h-4" />
-                                            </button>
-                                        </div>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {filteredManuscripts.length === 0 ? (
+                                <tr>
+                                    <td colSpan="5" className="px-6 py-12 text-center text-gray-400">
+                                        Aucune publication trouvée.
                                     </td>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+                            ) : (
+                                filteredManuscripts.map((m) => (
+                                    <tr key={m.id} className="hover:bg-gray-50/50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="font-medium text-gray-900">{m.title_main || 'Sans titre'}</div>
+                                            {m.title_secondary && <div className="text-xs text-gray-400">{m.title_secondary}</div>}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">
+                                                    {(m.main_author_name || '?').charAt(0)}
+                                                </div>
+                                                <span className="truncate max-w-[150px]">
+                                                    {m.main_author_name} {m.main_author_firstname}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-gray-500">
+                                            {m.collection_title || '-'}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <select
+                                                value={m.position || 'en saisie'}
+                                                onChange={(e) => handleUpdateStatus(m.id, e.target.value)}
+                                                className={`text-xs font-medium px-2 py-1 rounded-full border outline-none cursor-pointer ${m.position === 'validé' ? 'bg-green-50 text-green-700 border-green-100' :
+                                                    m.position === 'en attente' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                                        'bg-gray-50 text-gray-700 border-gray-200'
+                                                    }`}
+                                            >
+                                                <option value="en saisie">En saisie</option>
+                                                <option value="en attente">Demande validation</option>
+                                                <option value="validé">Validé</option>
+                                                <option value="rejeté">Rejeté</option>
+                                            </select>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <button
+                                                    onClick={() => navigate(`/admin/content/${m.id}`)}
+                                                    className="p-1 text-gray-400 hover:text-note-purple transition-colors"
+                                                    title="Modifier"
+                                                >
+                                                    <FileText className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

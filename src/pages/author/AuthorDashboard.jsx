@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, Clock, CheckCircle, Plus } from 'lucide-react';
+import ProfileCompletionCard from '../../components/ProfileCompletionCard';
 
 const AuthorDashboard = () => {
     const { user } = useAuth();
@@ -72,6 +73,9 @@ const AuthorDashboard = () => {
                 </button>
             </div>
 
+            {/* Profile Completion Card */}
+            <ProfileCompletionCard />
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
@@ -127,8 +131,8 @@ const AuthorDashboard = () => {
                                     <td className="px-6 py-4">{new Date(m.created_at).toLocaleDateString()}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 rounded-full text-xs border ${m.position === 'validé' ? 'bg-green-50 text-green-700 border-green-100' :
-                                                m.position === 'en attente' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                                    'bg-gray-50 text-gray-600 border-gray-200'
+                                            m.position === 'en attente' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                                'bg-gray-50 text-gray-600 border-gray-200'
                                             }`}>
                                             {m.position}
                                         </span>
