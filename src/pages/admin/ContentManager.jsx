@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-import { BookOpen, CheckCircle, XCircle, Clock, Eye, FileText, Download } from 'lucide-react';
+import { BookOpen, CheckCircle, XCircle, Clock, Eye, FileText, Download, Trash2 } from 'lucide-react';
 
 const ContentManager = () => {
     const navigate = useNavigate();
@@ -57,6 +57,24 @@ const ContentManager = () => {
             ));
         } catch (err) {
             alert("Erreur lors de la mise à jour : " + err.message);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette publication ?")) return;
+
+        try {
+            const { error } = await supabase
+                .from('publications')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            // Optimistic Update
+            setManuscripts(manuscripts.filter(m => m.id !== id));
+        } catch (err) {
+            alert("Erreur lors de la suppression : " + err.message);
         }
     };
 
@@ -170,6 +188,13 @@ const ContentManager = () => {
                                                     title="Modifier"
                                                 >
                                                     <FileText className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(m.id)}
+                                                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                                    title="Supprimer"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
                                         </td>

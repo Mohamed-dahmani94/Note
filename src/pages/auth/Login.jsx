@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -14,21 +14,24 @@ const Login = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // Redirect if already logged in
-    // Note: We don't redirect to /admin automatically here to avoid loops if not admin
-    // only if coming from a protected route or just manual navigation
-    /* 
-    useEffect(() => {
-        if (user) {
-           // Optional: navigate('/'); 
-        }
-    }, [user, navigate]);
-    */
-
-    // Form States
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
+
+    // --- REDIRECTION LOGIC (Add this) ---
+    const { user, loading: authLoading } = useAuth();
+    useEffect(() => {
+        if (!authLoading && user) {
+            const role = user.app_metadata?.role || user.role;
+            console.log("Login: Already logged in, redirecting based on role:", role);
+            if (role === 'admin') {
+                navigate('/admin');
+            } else {
+                navigate('/author');
+            }
+        }
+    }, [user, authLoading, navigate]);
+    // ------------------------------------
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -76,6 +79,15 @@ const Login = () => {
         // Mock function for consistency
         alert(`Social Login with ${provider} requires Supabase configuration.`);
     };
+
+    if (authLoading) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-note-purple"></div>
+                <p className="text-gray-400 text-sm">Vérification de la session...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-white relative overflow-hidden flex items-center justify-center font-sans text-gray-800">

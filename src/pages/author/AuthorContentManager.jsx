@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-import { BookOpen, Clock, FileText, Plus } from 'lucide-react';
+import { BookOpen, Clock, FileText, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 const AuthorContentManager = () => {
@@ -31,6 +31,24 @@ const AuthorContentManager = () => {
             setError(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce manuscrit ?")) return;
+
+        try {
+            const { error } = await supabase
+                .from('publications')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            // Optimistic Update
+            setManuscripts(manuscripts.filter(m => m.id !== id));
+        } catch (err) {
+            alert("Erreur lors de la suppression : " + err.message);
         }
     };
 
@@ -125,21 +143,30 @@ const AuthorContentManager = () => {
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium border ${m.position === 'validé' ? 'bg-green-50 text-green-700 border-green-100' :
-                                                    m.position === 'en attente' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                        m.position === 'en saisie' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                                            'bg-gray-50 text-gray-700 border-gray-200'
+                                                m.position === 'en attente' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                                    m.position === 'en saisie' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                                        'bg-gray-50 text-gray-700 border-gray-200'
                                                 }`}>
                                                 {m.position}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <button
-                                                onClick={() => navigate(`/author/content/${m.id}`)}
-                                                className="inline-flex items-center gap-1 text-note-purple hover:underline font-medium"
-                                            >
-                                                <FileText className="w-4 h-4" />
-                                                Modifier
-                                            </button>
+                                            <div className="flex justify-end gap-3">
+                                                <button
+                                                    onClick={() => navigate(`/author/content/${m.id}`)}
+                                                    className="inline-flex items-center gap-1 text-note-purple hover:underline font-medium"
+                                                >
+                                                    <FileText className="w-4 h-4" />
+                                                    {t('modify', 'Modifier')}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(m.id)}
+                                                    className="inline-flex items-center gap-1 text-red-500 hover:text-red-700 transition-colors"
+                                                    title={t('delete', 'Supprimer')}
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

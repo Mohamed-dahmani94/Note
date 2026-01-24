@@ -40,45 +40,20 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         let mounted = true;
+        console.log("AuthProvider: Initializing listener...");
 
-        // 1. Fast Path
-        const initSession = async () => {
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                console.log("AuthProvider: Init Session found:", !!session);
-                if (session?.user) {
-                    if (mounted) await fetchProfile(session.user);
-                } else {
-                    if (mounted) setLoading(false);
-                }
-            } catch (e) {
-                console.error("Init session failed", e);
-                if (mounted) setLoading(false);
-            }
-        };
-        initSession();
-
-        // 2. Auth State Listener
-        // 2. Auth State Listener (Robust handling)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log("AuthProvider: Auth Event:", event);
+            console.log(`AuthProvider: Event: ${event}`);
 
-            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-                // If we have a valid session, ensure our App State is in sync
-                // especially for Token Refreshes (which update the JWT role)
-                if (session?.user && mounted) {
-                    // Check if we actually need to update (avoid infinite loops if user obj is same)
-                    // But since we decorate 'user' with DB data, we should re-sync.
-                    // fetchProfile handles the merging and is now optimistic (fast).
-                    await fetchProfile(session.user);
-                }
-            } else if (event === 'SIGNED_OUT') {
-                if (mounted) {
-                    setUser(null);
-                    setLoading(false);
-                    // Clear any sensitive local storage if needed beyond Supabase's default
-                    localStorage.removeItem('supabase.auth.token'); // Cleanup helper
-                }
+            if (!mounted) return;
+
+            if (session?.user) {
+                // We have a session!
+                await fetchProfile(session.user);
+            } else {
+                // No session
+                setUser(null);
+                setLoading(false);
             }
         });
 
