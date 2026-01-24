@@ -13,7 +13,7 @@ serve(async (req) => {
 
     try {
         const { manuscriptId } = await req.json()
-        console.log(`[V1.7] Analyse IA pour le manuscrit ID: ${manuscriptId}`)
+        console.log(`[V1.8 DEBUG] Début de l'analyse pour ID: ${manuscriptId}`)
 
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
@@ -21,6 +21,7 @@ serve(async (req) => {
         )
 
         // 1. Fetch Publication data
+        console.log("[V1.8] Récupération du manuscrit...")
         const { data: manuscript, error: manuscriptError } = await supabaseClient
             .from('publications')
             .select('*')
@@ -28,123 +29,104 @@ serve(async (req) => {
             .single()
 
         if (manuscriptError || !manuscript) {
-            throw new Error(`Manuscrit ${manuscriptId} non trouvé dans la base de données.`)
+            throw new Error(`Data fetch error: ${manuscriptError?.message || 'Manuscript not found'}`)
         }
 
         // 2. Fetch Author Profile
+        console.log("[V1.8] Récupération du profil...")
         const { data: profile } = await supabaseClient
             .from('profiles')
             .select('*')
             .eq('id', manuscript.user_id)
             .single()
 
-        // 3. Mark as processing
-        await supabaseClient
-            .from('publications')
-            .update({ ai_status: 'processing' })
-            .eq('id', manuscriptId)
+        // 3. Status -> processing
+        await supabaseClient.from('publications').update({ ai_status: 'processing' }).eq('id', manuscriptId)
 
-        // 4. Fetch Custom Prompt from settings
+        // 4. Fetch Custom Prompt
+        console.log("[V1.8] Récupération du prompt...")
         const { data: setting } = await supabaseClient
             .from('admin_settings')
             .select('value')
             .eq('key', 'ai_manuscript_prompt')
             .single()
 
-        const promptTemplate = setting?.value || "Analyse ce manuscrit: {{title}}"
+        const promptTemplate = setting?.value || "Analyze this manuscript and return JSON only: {{title}}"
 
-        // 5. Extract text from file
-        let extractedText = "Aucun texte n'a pu être extrait du fichier."
+        // 5. Extract text from file (Simplifié)
+        let extractedText = "Texte non disponible."
         const filePath = manuscript.file_doc_url || manuscript.file_pdf_url
 
         if (filePath) {
-            console.log(`[V1.7] Récupération du fichier: ${filePath}`)
-            const { data: fileBlob, error: downloadError } = await supabaseClient
-                .storage
-                .from('manuscripts')
-                .download(filePath)
-
-            if (!downloadError && fileBlob) {
+            console.log(`[V1.8] Téléchargement: ${filePath}`)
+            const { data: fileBlob } = await supabaseClient.storage.from('manuscripts').download(filePath)
+            if (fileBlob) {
                 const arrayBuffer = await fileBlob.arrayBuffer()
                 if (filePath.endsWith('.docx')) {
                     try {
                         const mammoth = await import("https://esm.sh/mammoth@1.6.0")
-                        const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+                        const result = await mammoth.extractRawText({ arrayBuffer })
                         extractedText = result.value
-                    } catch (extErr) {
-                        console.error("[V1.7] Erreur extraction DOCX:", extErr)
-                        extractedText = "Le fichier DOCX n'a pas pu être lu correctement."
-                    }
-                } else if (filePath.endsWith('.pdf')) {
-                    extractedText = "L'extraction du texte PDF n'est pas encore activée (en cours de développement)."
+                    } catch (e) { console.error("Mammoth error", e) }
                 }
             }
         }
 
         // 6. Build the final prompt
         const finalPrompt = promptTemplate
-            .replace("{{title}}", manuscript.title_main || "Titre inconnu")
-            .replace("{{summary}}", manuscript.summary || "Pas de résumé")
-            .replace("{{keywords}}", manuscript.keywords || "Pas de mots-clés")
+            .replace("{{title}}", manuscript.title_main || "")
+            .replace("{{summary}}", manuscript.summary || "")
+            .replace("{{keywords}}", manuscript.keywords || "")
             .replace("{{content}}", extractedText)
-            .replace("{{author_profile}}", JSON.stringify(profile || "Données auteur non disponibles"))
+            .replace("{{author_profile}}", JSON.stringify(profile || "Inconnu"))
 
-        // 7. Call Gemini API (using snake_case for REST compatibility)
-        console.log("[V1.7] Envoi à Gemini API...")
+        // 7. Gemini Call (ULTRA SIMPLE VERSION)
+        console.log("[V1.8] Appel API Gemini (Simple Mode)...")
         const geminiKey = Deno.env.get('GEMINI_API_KEY')
+        if (!geminiKey) throw new Error("GEMINI_API_KEY is missing in secrets.")
 
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{ text: finalPrompt }]
-                    }],
-                    generation_config: {
-                        response_mime_type: "application/json"
-                    }
-                })
-            }
-        )
+        // Using v1beta and NO generation_config for max compatibility
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`
+
+        const response = await fetch(geminiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: finalPrompt }] }]
+            })
+        })
 
         if (!response.ok) {
-            const errorText = await response.text()
-            console.error(`[V1.7] Erreur Gemini (${response.status}):`, errorText)
-            throw new Error(`Gemini API Error: ${response.status}`)
+            const apiError = await response.text()
+            console.error(`[V1.8] API ERROR: ${apiError}`)
+            throw new Error(`Gemini Error ${response.status}: ${apiError.substring(0, 100)}`)
         }
 
         const geminiData = await response.json()
         let resultText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
 
-        if (!resultText) throw new Error("L'IA a renvoyé une réponse vide.")
+        if (!resultText) throw new Error("Empty AI response.")
 
-        // Cleaning markdown if any (Gemini sometimes adds it even with response_mime_type)
+        // 8. Clean and Parse JSON
         resultText = resultText.replace(/```json\n?/, '').replace(/\n?```/, '').trim()
         const aiResult = JSON.parse(resultText)
 
-        // 8. Update Publication status and result
-        console.log("[V1.7] Analyse terminée. Enregistrement des résultats...")
-        const { error: updateError } = await supabaseClient
-            .from('publications')
-            .update({
-                ai_score: Math.round(aiResult.final_evaluation?.overall_score || 0),
-                ai_detailed_review: aiResult,
-                ai_status: 'completed'
-            })
-            .eq('id', manuscriptId)
+        // 9. Update Result
+        console.log("[V1.8] Enregistrement du rapport...")
+        await supabaseClient.from('publications').update({
+            ai_score: Math.round(aiResult.final_evaluation?.overall_score || 0),
+            ai_detailed_review: aiResult,
+            ai_status: 'completed'
+        }).eq('id', manuscriptId)
 
-        if (updateError) throw updateError
-
-        return new Response(JSON.stringify({ success: true, message: "Analyse terminée avec succès." }), {
+        return new Response(JSON.stringify({ success: true, version: "1.8" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         })
 
     } catch (error) {
-        console.error(`[V1.7] Erreur critique: ${error.message}`)
-        return new Response(JSON.stringify({ error: error.message }), {
+        console.error(`[V1.8 CRITICAL] ${error.message}`)
+        return new Response(JSON.stringify({ error: error.message, version: "1.8" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 500,
         })
