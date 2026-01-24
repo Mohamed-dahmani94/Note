@@ -6,7 +6,7 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
@@ -57,7 +57,7 @@ serve(async (req) => {
                         const result = await mammoth.extractRawText({ arrayBuffer })
                         extractedText = result.value
                         console.log(`[Mammoth] Succès extraction (${extractedText.length} chars)`)
-                    } catch (e) {
+                    } catch (e: any) {
                         console.error("[Mammoth] Erreur:", e.message)
                     }
                 }
@@ -114,7 +114,7 @@ serve(async (req) => {
             status: 200,
         })
 
-    } catch (error) {
+    } catch (error: any) {
         console.error(`[FATAL V1.6] ${error.message}`)
         return new Response(JSON.stringify({ error: error.message, version: "V1.6" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

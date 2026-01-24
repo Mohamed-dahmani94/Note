@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
-import { MoreVertical, Shield, User, Edit, Trash2 } from 'lucide-react';
+import { MoreVertical, Shield, User, Edit, Trash2, Eye } from 'lucide-react';
 
 const UsersManager = () => {
     const { user: currentUser } = useAuth();
@@ -128,13 +128,22 @@ const UsersManager = () => {
                                         {u.full_name || '-'}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button
-                                            onClick={() => handleEditClick(u)}
-                                            className="text-gray-400 hover:text-note-purple p-2 rounded-lg hover:bg-gray-100 transition-all"
-                                            title="Modifier le rôle"
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex justify-end gap-2">
+                                            <button
+                                                onClick={() => handleEditClick(u)}
+                                                className="text-gray-400 hover:text-note-purple p-2 rounded-lg hover:bg-gray-100 transition-all"
+                                                title="Afficher les détails"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleEditClick(u)}
+                                                className="text-gray-400 hover:text-note-purple p-2 rounded-lg hover:bg-gray-100 transition-all"
+                                                title="Modifier le rôle"
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))
