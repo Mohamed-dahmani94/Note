@@ -13,35 +13,33 @@ serve(async (req) => {
 
     try {
         const { manuscriptId } = await req.json()
-        console.log(`[Gemini V1.3] Démarrage de l'analyse pour ID: ${manuscriptId}`)
+        console.log(`[Gemini V1.4] Démarrage de l'analyse pour ID: ${manuscriptId}`)
 
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        // 1. Fetch Publication data
+        // 1. Publication
         const { data: manuscript, error: manuscriptError } = await supabaseClient
             .from('publications')
             .select('*')
             .eq('id', manuscriptId)
             .single()
 
-        if (manuscriptError || !manuscript) {
-            throw new Error(`Data fetch error: ${manuscriptError?.message || 'Manuscript not found'}`)
-        }
+        if (manuscriptError || !manuscript) throw new Error(`Data fetch error: ${manuscriptError?.message}`)
 
-        // 2. Fetch Author Profile
+        // 2. Profile
         const { data: profile } = await supabaseClient
             .from('profiles')
             .select('*')
             .eq('id', manuscript.user_id)
             .single()
 
-        // 3. Mark as processing
+        // 3. Status -> processing
         await supabaseClient.from('publications').update({ ai_status: 'processing' }).eq('id', manuscriptId)
 
-        // 4. Fetch Custom Prompt
+        // 4. Prompt
         const { data: setting } = await supabaseClient
             .from('admin_settings')
             .select('value')
@@ -50,12 +48,11 @@ serve(async (req) => {
 
         const promptTemplate = setting?.value || "Analyze this manuscript and return JSON only: {{title}}"
 
-        // 5. Extract text from file (Simplifié pour V1.3)
-        let extractedText = "Texte non disponible dans cette analyse rapide."
+        // 5. Content extraction (Simplifié)
+        let extractedText = "Le texte n'a pas pu être extrait."
         const filePath = manuscript.file_doc_url || manuscript.file_pdf_url
-
         if (filePath) {
-            console.log(`[Gemini V1.3] Téléchargement: ${filePath}`)
+            console.log(`[V1.4] Téléchargement: ${filePath}`)
             const { data: fileBlob } = await supabaseClient.storage.from('manuscripts').download(filePath)
             if (fileBlob) {
                 const arrayBuffer = await fileBlob.arrayBuffer()
@@ -69,22 +66,21 @@ serve(async (req) => {
             }
         }
 
-        // 6. Build the final prompt
-        const authorContent = profile ? JSON.stringify(profile) : "{}"
+        // 6. Final Prompt
         const finalPrompt = promptTemplate
             .replace("{{title}}", manuscript.title_main || "Sans titre")
             .replace("{{summary}}", manuscript.summary || "Pas de résumé")
             .replace("{{keywords}}", manuscript.keywords || "Pas de mots-clés")
             .replace("{{content}}", extractedText)
-            .replace("{{author_profile}}", authorContent)
+            .replace("{{author_profile}}", JSON.stringify(profile || {}))
 
-        // 7. Gemini Call (RE-FIXED VERSION V1.3)
-        console.log("[Gemini V1.3] Calling Google API (1.5 Flash)...")
+        // 7. Gemini Call (V1.4 - Using v1 stable endpoint)
+        console.log("[V1.4] Envoi à Gemini (v1 stable)...")
         const geminiKey = Deno.env.get('GEMINI_API_KEY')
-        if (!geminiKey) throw new Error("GEMINI_API_KEY is missing in Supabase Secrets.")
+        if (!geminiKey) throw new Error("GEMINI_API_KEY is missing in secrets.")
 
-        // Using v1beta for better JSON support
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`
+        // Using v1 endpoint which is more stable in some regions
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${geminiKey}`
 
         const response = await fetch(geminiUrl, {
             method: 'POST',
@@ -99,41 +95,35 @@ serve(async (req) => {
 
         if (!response.ok) {
             const apiErr = await response.text()
-            console.error(`[Gemini V1.3] API Error: ${apiErr}`)
-            throw new Error(`Gemini API Error ${response.status}: ${apiErr}`)
+            console.error(`[V1.4] Error detail: ${apiErr}`)
+            throw new Error(`Gemini API Error ${response.status}`)
         }
 
         const geminiData = await response.json()
         let resultText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
 
-        if (!resultText) throw new Error("Empty response from Gemini.")
+        if (!resultText) throw new Error("Réponse IA vide.")
 
-        // Clean resultText if Gemini included markdown
+        // Nettoyage JSON
         resultText = resultText.replace(/```json\n?/, '').replace(/\n?```/, '').trim()
         const aiResult = JSON.parse(resultText)
 
-        // 8. Update DB
-        console.log("[Gemini V1.3] Saving institutional report...")
-        const { error: dbUpdateError } = await supabaseClient.from('publications').update({
+        // 8. DB Update
+        console.log("[V1.4] Enregistrement du rapport...")
+        await supabaseClient.from('publications').update({
             ai_score: Math.round(aiResult.final_evaluation?.overall_score || 0),
             ai_detailed_review: aiResult,
             ai_status: 'completed'
         }).eq('id', manuscriptId)
 
-        if (dbUpdateError) throw new Error(`Database Update failed: ${dbUpdateError.message}`)
-
-        return new Response(JSON.stringify({ success: true, version: "V1.3 (Gemini)" }), {
+        return new Response(JSON.stringify({ success: true, model: "gemini-1.5-flash" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         })
 
     } catch (error) {
-        console.error(`[Gemini V1.3 FATAL] ${error.message}`)
-        return new Response(JSON.stringify({
-            error: error.message,
-            version: "V1.3 (Gemini)",
-            tip: "Check logs at Supabase Dashboard for full context."
-        }), {
+        console.error(`[V1.4] Erreur: ${error.message}`)
+        return new Response(JSON.stringify({ error: error.message, version: "V1.4" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 500,
         })
