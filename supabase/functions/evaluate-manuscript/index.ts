@@ -13,7 +13,7 @@ serve(async (req) => {
 
     try {
         const { manuscriptId } = await req.json()
-        console.log(`[Version 1.2] Expertise IA pour ID: ${manuscriptId}`)
+        console.log(`[V1.6 FINAL FIX] Expertise IA pour ID: ${manuscriptId}`)
 
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
@@ -31,25 +31,25 @@ serve(async (req) => {
             throw new Error(`Manuscrit ${manuscriptId} non trouvé.`)
         }
 
-        // 1b. Fetch Profile
+        // 2. Fetch Profile
         const { data: profile } = await supabaseClient
             .from('profiles')
             .select('*')
             .eq('id', manuscript.user_id)
             .single()
 
-        // 2. Status -> processing
+        // 3. Status -> processing
         await supabaseClient.from('publications').update({ ai_status: 'processing' }).eq('id', manuscriptId)
 
-        // 3. Prompt
+        // 4. Prompt
         const { data: setting } = await supabaseClient.from('admin_settings').select('value').eq('key', 'ai_manuscript_prompt').single()
-        const promptTemplate = setting?.value || "Analyse multicritère pour: {{title}}"
+        const promptTemplate = setting?.value || "Analyse ce manuscrit: {{title}}"
 
-        // 4. Content extraction
+        // 5. Content extraction
         let extractedText = "Texte non disponible."
         const filePath = manuscript.file_doc_url || manuscript.file_pdf_url
         if (filePath) {
-            console.log(`[V1.2] Téléchargement: ${filePath}`)
+            console.log(`[V1.6] Téléchargement: ${filePath}`)
             const { data: fileBlob } = await supabaseClient.storage.from('manuscripts').download(filePath)
             if (fileBlob) {
                 const arrayBuffer = await fileBlob.arrayBuffer()
@@ -57,22 +57,21 @@ serve(async (req) => {
                     const mammoth = await import("https://esm.sh/mammoth@1.6.0")
                     const result = await mammoth.extractRawText({ arrayBuffer })
                     extractedText = result.value
-                } else {
-                    extractedText = "Format non supporté pour l'extraction intégrale (PDF/Autre)."
                 }
             }
         }
 
-        // 5. Final Prompt
+        // 6. Final Prompt
+        const authorInfo = profile ? JSON.stringify(profile) : "Inconnu"
         const finalPrompt = promptTemplate
             .replace("{{title}}", manuscript.title_main || "")
             .replace("{{summary}}", manuscript.summary || "")
             .replace("{{keywords}}", manuscript.keywords || "")
             .replace("{{content}}", extractedText)
-            .replace("{{author_profile}}", JSON.stringify(profile || {}))
+            .replace("{{author_profile}}", authorInfo)
 
-        // 6. Gemini Call (Stable v1 with 1.5 Flash)
-        console.log("[V1.2] Envoi à Gemini 1.5 Flash...")
+        // 7. Gemini Call (Correcting camelCase and API endpoint)
+        console.log("[V1.6] Envoi à Gemini 1.5 Flash (v1)...")
         const geminiKey = Deno.env.get('GEMINI_API_KEY')
 
         const response = await fetch(
@@ -82,14 +81,16 @@ serve(async (req) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: finalPrompt }] }],
-                    generationConfig: { response_mime_type: "application/json" }
+                    generationConfig: {
+                        responseMimeType: "application/json"
+                    }
                 })
             }
         )
 
         if (!response.ok) {
             const errorBody = await response.text()
-            console.error(`[V1.2] Erreur API: ${errorBody}`)
+            console.error(`[V1.6] Erreur API Gemini: ${errorBody}`)
             throw new Error(`Gemini API Error: ${response.status}`)
         }
 
@@ -100,7 +101,7 @@ serve(async (req) => {
 
         const aiResult = JSON.parse(resultText)
 
-        // 7. DB Update
+        // 8. DB Update
         await supabaseClient.from('publications').update({
             ai_score: Math.round(aiResult.final_evaluation?.overall_score || 0),
             ai_detailed_review: aiResult,
@@ -113,7 +114,7 @@ serve(async (req) => {
         })
 
     } catch (error) {
-        console.error(`[V1.2] Erreur: ${error.message}`)
+        console.error(`[V1.6] Erreur: ${error.message}`)
         return new Response(JSON.stringify({ error: error.message }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 500,
