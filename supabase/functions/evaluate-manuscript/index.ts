@@ -13,14 +13,15 @@ serve(async (req) => {
 
     try {
         const { manuscriptId } = await req.json()
-        console.log(`[OpenAI V1.1] Démarrage de l'analyse pour ID: ${manuscriptId}`)
+        console.log(`[V1.2 DEBUG] STARTING analysis for ID: ${manuscriptId}`)
 
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        // 1. Data Fetch
+        // 1. Fetch Publication
+        console.log("[V1.2] Fetching manuscript data...")
         const { data: manuscript, error: manuscriptError } = await supabaseClient
             .from('publications')
             .select('*')
@@ -28,64 +29,48 @@ serve(async (req) => {
             .single()
 
         if (manuscriptError || !manuscript) {
-            throw new Error(`Erreur extraction base de données: ${manuscriptError?.message || 'Manuscrit introuvable'}`)
+            throw new Error(`DB Error: ${manuscriptError?.message || 'Manuscript not found'}`)
         }
 
+        // 2. Fetch Profile
+        console.log(`[V1.2] Fetching profile for user: ${manuscript.user_id}`)
         const { data: profile } = await supabaseClient
             .from('profiles')
             .select('*')
             .eq('id', manuscript.user_id)
             .single()
 
-        // 2. Processing State
+        // 3. Mark as processing
         await supabaseClient.from('publications').update({ ai_status: 'processing' }).eq('id', manuscriptId)
 
-        // 3. Prompt Fetch
-        const { data: setting } = await supabaseClient.from('admin_settings').select('value').eq('key', 'ai_manuscript_prompt').single()
-        const promptTemplate = setting?.value || "Analyse ce manuscrit et réponds en JSON: {{title}}"
+        // 4. Fetch Custom Prompt
+        console.log("[V1.2] Fetching prompt content...")
+        const { data: setting } = await supabaseClient
+            .from('admin_settings')
+            .select('value')
+            .eq('key', 'ai_manuscript_prompt')
+            .single()
 
-        // 4. Text Extraction (with safer import)
-        let extractedText = "Aucun texte n'a pu être extrait du fichier."
-        const filePath = manuscript.file_doc_url || manuscript.file_pdf_url
+        const promptTemplate = setting?.value || "Analyze this manuscript: {{title}}"
 
-        if (filePath) {
-            console.log(`[OpenAI V1.1] Téléchargement: ${filePath}`)
-            const { data: fileBlob, error: storageError } = await supabaseClient.storage.from('manuscripts').download(filePath)
-            if (storageError) {
-                console.warn(`[OpenAI V1.1] Erreur storage: ${storageError.message}`)
-            } else if (fileBlob) {
-                const arrayBuffer = await fileBlob.arrayBuffer()
-                if (filePath.endsWith('.docx')) {
-                    try {
-                        // Using a more reliable import for mammoth
-                        const mammoth = await import("https://esm.sh/mammoth@1.6.0?no-check")
-                        const result = await mammoth.extractRawText({ arrayBuffer })
-                        extractedText = result.value
-                        console.log(`[OpenAI V1.1] Texte extrait: ${extractedText.length} caractères`)
-                    } catch (e) {
-                        console.error("[OpenAI V1.1] Mammoth failed:", e.message)
-                        extractedText = "Extraction DOCX impossible sur le serveur."
-                    }
-                }
-            }
-        }
+        // 5. Build raw meta prompt (Skip file extraction if it fails)
+        console.log("[V1.2] Building final prompt...")
+        let extractedText = "Texte non extrait (V1.2 Simplification)"
 
-        // 5. Final Prompt Assembly
         const finalPrompt = promptTemplate
-            .replace("{{title}}", manuscript.title_main || "")
-            .replace("{{summary}}", manuscript.summary || "")
-            .replace("{{keywords}}", manuscript.keywords || "")
+            .replace("{{title}}", manuscript.title_main || "Sans titre")
+            .replace("{{summary}}", manuscript.summary || "Pas de résumé")
+            .replace("{{keywords}}", manuscript.keywords || "Pas de mots-clés")
             .replace("{{content}}", extractedText)
-            .replace("{{author_profile}}", JSON.stringify(profile || "Inconnu"))
+            .replace("{{author_profile}}", JSON.stringify(profile || {}))
 
-        // 6. OpenAI Verification
+        // 6. OpenAI CALL
         const openAiKey = Deno.env.get('OPENAI_API_KEY')
-        if (!openAiKey || openAiKey === 'votre_cle_api') {
-            throw new Error("OPENAI_API_KEY est manquante ou non configurée dans les secrets Supabase.")
+        if (!openAiKey) {
+            throw new Error("CRITICAL: OPENAI_API_KEY is null in Supabase Secrets!")
         }
 
-        // 7. OpenAI API Call
-        console.log("[OpenAI V1.1] Appel GPT-4o...")
+        console.log("[V1.2] Calling OpenAI (gpt-4o)...")
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: 'POST',
             headers: {
@@ -95,42 +80,49 @@ serve(async (req) => {
             body: JSON.stringify({
                 model: "gpt-4o",
                 messages: [
-                    { role: "system", content: "Vous êtes un expert en édition. Vous devez répondre EXCLUSIVEMENT au format JSON." },
+                    { role: "system", content: "Expert éditorial. Réponds uniquement en JSON valide." },
                     { role: "user", content: finalPrompt }
                 ],
-                response_format: { type: "json_object" }
+                temperature: 0.7
             })
         })
 
         if (!response.ok) {
-            const errDetails = await response.text()
-            console.error(`[OpenAI V1.1] API OpenAI Error: ${errDetails}`)
-            throw new Error(`OpenAI API Error (${response.status}): ${errDetails}`)
+            const apiErr = await response.text()
+            console.error(`[V1.2] OpenAI API REJECTED: ${apiErr}`)
+            throw new Error(`OpenAI API ${response.status}: ${apiErr}`)
         }
 
         const openAiData = await response.json()
-        const resultText = openAiData.choices[0].message.content
+        let resultText = openAiData.choices[0].message.content
+
+        console.log("[V1.2] Analysis received successfully.")
+
+        // Clean resultText (sometimes OpenAI adds ```json ... ```)
+        resultText = resultText.replace(/```json\n?/, '').replace(/\n?```/, '').trim()
         const aiResult = JSON.parse(resultText)
 
-        // 8. Result Storage
-        console.log("[OpenAI V1.1] Succès! Enregistrement...")
-        await supabaseClient.from('publications').update({
+        // 7. Update DB
+        console.log("[V1.2] Saving result to database...")
+        const { error: dbUpdateError } = await supabaseClient.from('publications').update({
             ai_score: Math.round(aiResult.final_evaluation?.overall_score || 0),
             ai_detailed_review: aiResult,
             ai_status: 'completed'
         }).eq('id', manuscriptId)
 
-        return new Response(JSON.stringify({ success: true, version: "1.1" }), {
+        if (dbUpdateError) throw new Error(`Result save error: ${dbUpdateError.message}`)
+
+        return new Response(JSON.stringify({ success: true, version: "V1.2" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         })
 
     } catch (error) {
-        console.error(`[OpenAI V1.1 ERREUR] ${error.message}`)
+        console.error(`[V1.2 FATAL ERROR] ${error.message}`)
         return new Response(JSON.stringify({
             error: error.message,
-            tip: "Vérifiez que OPENAI_API_KEY est bien définie avec 'supabase secrets set'",
-            version: "1.1"
+            version: "V1.2",
+            details: "Veuillez vérifier les logs Supabase pour plus de détails."
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 500,
