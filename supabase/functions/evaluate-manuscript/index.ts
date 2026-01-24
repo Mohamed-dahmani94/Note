@@ -13,7 +13,7 @@ serve(async (req) => {
 
     try {
         const { manuscriptId } = await req.json()
-        console.log(`[V1.8 DEBUG] Début de l'analyse pour ID: ${manuscriptId}`)
+        console.log(`[OpenAI V1.0] Expertise IA pour ID: ${manuscriptId}`)
 
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
@@ -21,7 +21,6 @@ serve(async (req) => {
         )
 
         // 1. Fetch Publication data
-        console.log("[V1.8] Récupération du manuscrit...")
         const { data: manuscript, error: manuscriptError } = await supabaseClient
             .from('publications')
             .select('*')
@@ -29,36 +28,28 @@ serve(async (req) => {
             .single()
 
         if (manuscriptError || !manuscript) {
-            throw new Error(`Data fetch error: ${manuscriptError?.message || 'Manuscript not found'}`)
+            throw new Error(`Data acquisition failed: ${manuscriptError?.message}`)
         }
 
         // 2. Fetch Author Profile
-        console.log("[V1.8] Récupération du profil...")
         const { data: profile } = await supabaseClient
             .from('profiles')
             .select('*')
             .eq('id', manuscript.user_id)
             .single()
 
-        // 3. Status -> processing
+        // 3. Mark as processing
         await supabaseClient.from('publications').update({ ai_status: 'processing' }).eq('id', manuscriptId)
 
         // 4. Fetch Custom Prompt
-        console.log("[V1.8] Récupération du prompt...")
-        const { data: setting } = await supabaseClient
-            .from('admin_settings')
-            .select('value')
-            .eq('key', 'ai_manuscript_prompt')
-            .single()
-
+        const { data: setting } = await supabaseClient.from('admin_settings').select('value').eq('key', 'ai_manuscript_prompt').single()
         const promptTemplate = setting?.value || "Analyze this manuscript and return JSON only: {{title}}"
 
-        // 5. Extract text from file (Simplifié)
+        // 5. Extract text
         let extractedText = "Texte non disponible."
         const filePath = manuscript.file_doc_url || manuscript.file_pdf_url
-
         if (filePath) {
-            console.log(`[V1.8] Téléchargement: ${filePath}`)
+            console.log(`[OpenAI] Téléchargement: ${filePath}`)
             const { data: fileBlob } = await supabaseClient.storage.from('manuscripts').download(filePath)
             if (fileBlob) {
                 const arrayBuffer = await fileBlob.arrayBuffer()
@@ -67,7 +58,10 @@ serve(async (req) => {
                         const mammoth = await import("https://esm.sh/mammoth@1.6.0")
                         const result = await mammoth.extractRawText({ arrayBuffer })
                         extractedText = result.value
-                    } catch (e) { console.error("Mammoth error", e) }
+                    } catch (e) {
+                        console.error("Mammoth error", e)
+                        extractedText = "Erreur lors de l'extraction DOCX."
+                    }
                 }
             }
         }
@@ -78,55 +72,57 @@ serve(async (req) => {
             .replace("{{summary}}", manuscript.summary || "")
             .replace("{{keywords}}", manuscript.keywords || "")
             .replace("{{content}}", extractedText)
-            .replace("{{author_profile}}", JSON.stringify(profile || "Inconnu"))
+            .replace("{{author_profile}}", JSON.stringify(profile || "Données auteur manquantes"))
 
-        // 7. Gemini Call (ULTRA SIMPLE VERSION)
-        console.log("[V1.8] Appel API Gemini (Simple Mode)...")
-        const geminiKey = Deno.env.get('GEMINI_API_KEY')
-        if (!geminiKey) throw new Error("GEMINI_API_KEY is missing in secrets.")
+        // 7. OpenAI API Call
+        console.log("[OpenAI] Appel API GPT-4o...")
+        const openAiKey = Deno.env.get('OPENAI_API_KEY')
+        if (!openAiKey) throw new Error("OPENAI_API_KEY is missing in secrets.")
 
-        // Using v1beta and NO generation_config for max compatibility
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`
-
-        const response = await fetch(geminiUrl, {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${openAiKey}`
+            },
             body: JSON.stringify({
-                contents: [{ parts: [{ text: finalPrompt }] }]
+                model: "gpt-4o",
+                messages: [
+                    { role: "system", content: "Vous êtes un expert en édition. Répondez exclusivement au format JSON." },
+                    { role: "user", content: finalPrompt }
+                ],
+                response_format: { type: "json_object" }
             })
         })
 
         if (!response.ok) {
             const apiError = await response.text()
-            console.error(`[V1.8] API ERROR: ${apiError}`)
-            throw new Error(`Gemini Error ${response.status}: ${apiError.substring(0, 100)}`)
+            console.error(`[OpenAI] API ERROR: ${apiError}`)
+            throw new Error(`OpenAI Error ${response.status}: ${apiError}`)
         }
 
-        const geminiData = await response.json()
-        let resultText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
+        const openAiData = await response.json()
+        const resultText = openAiData.choices[0].message.content
 
         if (!resultText) throw new Error("Empty AI response.")
-
-        // 8. Clean and Parse JSON
-        resultText = resultText.replace(/```json\n?/, '').replace(/\n?```/, '').trim()
         const aiResult = JSON.parse(resultText)
 
-        // 9. Update Result
-        console.log("[V1.8] Enregistrement du rapport...")
+        // 8. Update DB
+        console.log("[OpenAI] Enregistrement du rapport...")
         await supabaseClient.from('publications').update({
             ai_score: Math.round(aiResult.final_evaluation?.overall_score || 0),
             ai_detailed_review: aiResult,
             ai_status: 'completed'
         }).eq('id', manuscriptId)
 
-        return new Response(JSON.stringify({ success: true, version: "1.8" }), {
+        return new Response(JSON.stringify({ success: true }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         })
 
     } catch (error) {
-        console.error(`[V1.8 CRITICAL] ${error.message}`)
-        return new Response(JSON.stringify({ error: error.message, version: "1.8" }), {
+        console.error(`[OpenAI CRITICAL] ${error.message}`)
+        return new Response(JSON.stringify({ error: error.message }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 500,
         })
