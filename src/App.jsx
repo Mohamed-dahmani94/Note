@@ -12,6 +12,7 @@ import UserDetails from './pages/admin/UserDetails';
 import CreateUser from './pages/admin/CreateUser';
 import ContentManager from './pages/admin/ContentManager';
 import PublicationForm from './pages/admin/PublicationForm';
+import AIEvaluationManager from './pages/admin/AIEvaluationManager';
 import AuthorLayout from './components/layouts/AuthorLayout';
 import AuthorRoute from './components/auth/AuthorRoute';
 import AuthorDashboard from './pages/author/AuthorDashboard';
@@ -49,6 +50,7 @@ function App() {
                             <Route path="content" element={<ContentManager />} />
                             <Route path="content/new" element={<PublicationForm />} />
                             <Route path="content/:id" element={<PublicationForm />} />
+                            <Route path="ai-analysis" element={<AIEvaluationManager />} />
                             <Route path="profile" element={<ProfilePage />} />
                         </Route>
 

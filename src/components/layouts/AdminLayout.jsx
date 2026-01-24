@@ -10,7 +10,8 @@ import {
     LogOut,
     Menu,
     X,
-    Bell
+    Bell,
+    BrainCircuit
 } from 'lucide-react';
 import LanguageSwitcher from '../LanguageSwitcher';
 
@@ -33,6 +34,7 @@ const AdminLayout = () => {
         { path: '/admin', end: true, icon: LayoutDashboard, label: t('dashboard') },
         { path: '/admin/users', icon: Users, label: t('users') },
         { path: '/admin/content', icon: BookOpen, label: t('content') },
+        { path: '/admin/ai-analysis', icon: BrainCircuit, label: t('ai_analysis') },
     ];
 
     return (
