@@ -35,6 +35,7 @@ const AdminLayout = () => {
         { path: '/admin/users', icon: Users, label: t('users') },
         { path: '/admin/content', icon: BookOpen, label: t('content') },
         { path: '/admin/ai-analysis', icon: BrainCircuit, label: t('ai_analysis') },
+        { path: '/admin/ai-config', icon: Settings, label: t('ai_config', 'Configuration IA') },
     ];
 
     return (

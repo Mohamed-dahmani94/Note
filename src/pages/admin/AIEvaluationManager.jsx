@@ -5,24 +5,65 @@ import { BrainCircuit, Star, FileText, User, ChevronRight, Activity, AlertCircle
 const AIEvaluationManager = () => {
     const [manuscripts, setManuscripts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [analyzingId, setAnalyzingId] = useState(null);
+    const [customPrompt, setCustomPrompt] = useState(null);
 
     useEffect(() => {
         fetchManuscripts();
+        fetchPrompts();
     }, []);
+
+    const fetchPrompts = async () => {
+        const { data } = await supabase
+            .from('admin_settings')
+            .select('value')
+            .eq('key', 'ai_manuscript_prompt')
+            .single();
+        if (data) setCustomPrompt(data.value);
+    };
 
     const fetchManuscripts = async () => {
         setLoading(true);
+        setError(null);
         try {
-            const { data, error } = await supabase
+            console.log("Fetching all publications...");
+            const { data: pubs, error: pubError } = await supabase
                 .from('publications')
-                .select('*, author_profile:profiles(*)')
+                .select('*')
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
-            setManuscripts(data || []);
+            if (pubError) throw pubError;
+
+            console.log("Publications fetched:", pubs?.length);
+
+            if (pubs && pubs.length > 0) {
+                // Fetch profiles for these users
+                const userIds = [...new Set(pubs.map(p => p.user_id).filter(id => id))];
+
+                if (userIds.length > 0) {
+                    const { data: profs, error: profError } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .in('id', userIds);
+
+                    if (!profError && profs) {
+                        const profMap = Object.fromEntries(profs.map(p => [p.id, p]));
+                        const enriched = pubs.map(p => ({
+                            ...p,
+                            author_profile: profMap[p.user_id] || null
+                        }));
+                        setManuscripts(enriched);
+                        return;
+                    }
+                }
+                setManuscripts(pubs);
+            } else {
+                setManuscripts([]);
+            }
         } catch (err) {
             console.error("Error fetching manuscripts:", err);
+            setError(err.message);
         } finally {
             setLoading(false);
         }
@@ -34,7 +75,17 @@ const AIEvaluationManager = () => {
         // Simulating AI Request to Edge Function
         // In a real scenario, we would call: supabase.functions.invoke('analyze-manuscript', { body: { id: m.id } })
         try {
-            console.log(`Analyzing manuscript ${m.id} and file ${m.file_doc_url || m.file_pdf_url}`);
+            console.log(`Analyzing manuscript with custom prompt...`);
+
+            // Build the prompt context
+            const promptContext = customPrompt || "";
+            const finalPrompt = promptContext
+                .replace("{{title}}", m.title_main || "Untitled")
+                .replace("{{summary}}", m.summary || "No summary")
+                .replace("{{keywords}}", m.keywords || "None")
+                .replace("{{author_profile}}", m.author_profile ? JSON.stringify(m.author_profile) : "No bio");
+
+            console.log("PROMPT ENVOYÉ À L'IA :", finalPrompt);
 
             // For Demo/Mock purposes until Edge Function is ready:
             setTimeout(async () => {
@@ -79,6 +130,22 @@ const AIEvaluationManager = () => {
                     <p className="text-gray-500 mt-1">Analyse approfondie des manuscrits et des profils auteurs.</p>
                 </div>
             </div>
+
+            {error && (
+                <div className="bg-red-50 text-red-800 p-4 rounded-2xl border border-red-200 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <div>
+                        <h4 className="font-bold">Erreur de chargement</h4>
+                        <p className="text-sm">{error}</p>
+                        <button
+                            onClick={fetchManuscripts}
+                            className="mt-2 text-xs font-bold underline hover:no-underline"
+                        >
+                            Réessayer
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 gap-6">
                 {manuscripts.map((m) => (
@@ -195,7 +262,13 @@ const AIEvaluationManager = () => {
                 {manuscripts.length === 0 && (
                     <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
                         <User className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                        <h3 className="font-bold text-gray-400">Aucun manuscrit en attente</h3>
+                        <h3 className="font-bold text-gray-400 mb-4">Aucun manuscrit trouvé</h3>
+                        <button
+                            onClick={fetchManuscripts}
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        >
+                            Actualiser la liste
+                        </button>
                     </div>
                 )}
             </div>
