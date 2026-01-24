@@ -13,15 +13,14 @@ serve(async (req) => {
 
     try {
         const { manuscriptId } = await req.json()
-        console.log(`[V1.2 DEBUG] STARTING analysis for ID: ${manuscriptId}`)
+        console.log(`[Gemini V1.3] Démarrage de l'analyse pour ID: ${manuscriptId}`)
 
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        // 1. Fetch Publication
-        console.log("[V1.2] Fetching manuscript data...")
+        // 1. Fetch Publication data
         const { data: manuscript, error: manuscriptError } = await supabaseClient
             .from('publications')
             .select('*')
@@ -29,11 +28,10 @@ serve(async (req) => {
             .single()
 
         if (manuscriptError || !manuscript) {
-            throw new Error(`DB Error: ${manuscriptError?.message || 'Manuscript not found'}`)
+            throw new Error(`Data fetch error: ${manuscriptError?.message || 'Manuscript not found'}`)
         }
 
-        // 2. Fetch Profile
-        console.log(`[V1.2] Fetching profile for user: ${manuscript.user_id}`)
+        // 2. Fetch Author Profile
         const { data: profile } = await supabaseClient
             .from('profiles')
             .select('*')
@@ -44,85 +42,97 @@ serve(async (req) => {
         await supabaseClient.from('publications').update({ ai_status: 'processing' }).eq('id', manuscriptId)
 
         // 4. Fetch Custom Prompt
-        console.log("[V1.2] Fetching prompt content...")
         const { data: setting } = await supabaseClient
             .from('admin_settings')
             .select('value')
             .eq('key', 'ai_manuscript_prompt')
             .single()
 
-        const promptTemplate = setting?.value || "Analyze this manuscript: {{title}}"
+        const promptTemplate = setting?.value || "Analyze this manuscript and return JSON only: {{title}}"
 
-        // 5. Build raw meta prompt (Skip file extraction if it fails)
-        console.log("[V1.2] Building final prompt...")
-        let extractedText = "Texte non extrait (V1.2 Simplification)"
+        // 5. Extract text from file (Simplifié pour V1.3)
+        let extractedText = "Texte non disponible dans cette analyse rapide."
+        const filePath = manuscript.file_doc_url || manuscript.file_pdf_url
 
+        if (filePath) {
+            console.log(`[Gemini V1.3] Téléchargement: ${filePath}`)
+            const { data: fileBlob } = await supabaseClient.storage.from('manuscripts').download(filePath)
+            if (fileBlob) {
+                const arrayBuffer = await fileBlob.arrayBuffer()
+                if (filePath.endsWith('.docx')) {
+                    try {
+                        const mammoth = await import("https://esm.sh/mammoth@1.6.0")
+                        const result = await mammoth.extractRawText({ arrayBuffer })
+                        extractedText = result.value
+                    } catch (e) { console.error("Mammoth error", e) }
+                }
+            }
+        }
+
+        // 6. Build the final prompt
+        const authorContent = profile ? JSON.stringify(profile) : "{}"
         const finalPrompt = promptTemplate
             .replace("{{title}}", manuscript.title_main || "Sans titre")
             .replace("{{summary}}", manuscript.summary || "Pas de résumé")
             .replace("{{keywords}}", manuscript.keywords || "Pas de mots-clés")
             .replace("{{content}}", extractedText)
-            .replace("{{author_profile}}", JSON.stringify(profile || {}))
+            .replace("{{author_profile}}", authorContent)
 
-        // 6. OpenAI CALL
-        const openAiKey = Deno.env.get('OPENAI_API_KEY')
-        if (!openAiKey) {
-            throw new Error("CRITICAL: OPENAI_API_KEY is null in Supabase Secrets!")
-        }
+        // 7. Gemini Call (RE-FIXED VERSION V1.3)
+        console.log("[Gemini V1.3] Calling Google API (1.5 Flash)...")
+        const geminiKey = Deno.env.get('GEMINI_API_KEY')
+        if (!geminiKey) throw new Error("GEMINI_API_KEY is missing in Supabase Secrets.")
 
-        console.log("[V1.2] Calling OpenAI (gpt-4o)...")
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        // Using v1beta for better JSON support
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`
+
+        const response = await fetch(geminiUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${openAiKey}`
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: "gpt-4o",
-                messages: [
-                    { role: "system", content: "Expert éditorial. Réponds uniquement en JSON valide." },
-                    { role: "user", content: finalPrompt }
-                ],
-                temperature: 0.7
+                contents: [{ parts: [{ text: finalPrompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
             })
         })
 
         if (!response.ok) {
             const apiErr = await response.text()
-            console.error(`[V1.2] OpenAI API REJECTED: ${apiErr}`)
-            throw new Error(`OpenAI API ${response.status}: ${apiErr}`)
+            console.error(`[Gemini V1.3] API Error: ${apiErr}`)
+            throw new Error(`Gemini API Error ${response.status}: ${apiErr}`)
         }
 
-        const openAiData = await response.json()
-        let resultText = openAiData.choices[0].message.content
+        const geminiData = await response.json()
+        let resultText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
 
-        console.log("[V1.2] Analysis received successfully.")
+        if (!resultText) throw new Error("Empty response from Gemini.")
 
-        // Clean resultText (sometimes OpenAI adds ```json ... ```)
+        // Clean resultText if Gemini included markdown
         resultText = resultText.replace(/```json\n?/, '').replace(/\n?```/, '').trim()
         const aiResult = JSON.parse(resultText)
 
-        // 7. Update DB
-        console.log("[V1.2] Saving result to database...")
+        // 8. Update DB
+        console.log("[Gemini V1.3] Saving institutional report...")
         const { error: dbUpdateError } = await supabaseClient.from('publications').update({
             ai_score: Math.round(aiResult.final_evaluation?.overall_score || 0),
             ai_detailed_review: aiResult,
             ai_status: 'completed'
         }).eq('id', manuscriptId)
 
-        if (dbUpdateError) throw new Error(`Result save error: ${dbUpdateError.message}`)
+        if (dbUpdateError) throw new Error(`Database Update failed: ${dbUpdateError.message}`)
 
-        return new Response(JSON.stringify({ success: true, version: "V1.2" }), {
+        return new Response(JSON.stringify({ success: true, version: "V1.3 (Gemini)" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         })
 
     } catch (error) {
-        console.error(`[V1.2 FATAL ERROR] ${error.message}`)
+        console.error(`[Gemini V1.3 FATAL] ${error.message}`)
         return new Response(JSON.stringify({
             error: error.message,
-            version: "V1.2",
-            details: "Veuillez vérifier les logs Supabase pour plus de détails."
+            version: "V1.3 (Gemini)",
+            tip: "Check logs at Supabase Dashboard for full context."
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 500,
