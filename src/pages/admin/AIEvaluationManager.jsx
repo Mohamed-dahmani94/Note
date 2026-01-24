@@ -59,64 +59,24 @@ const AIEvaluationManager = () => {
 
     const handleRunAI = async (m) => {
         setAnalyzingId(m.id);
+        setError(null);
         try {
-            // Simulation logic matching the new professional prompt structure
-            setTimeout(async () => {
-                const mockReview = {
-                    language_detected: m.language === 'Arabe' ? 'ar' : 'fr',
-                    manuscript: {
-                        title: m.title_main,
-                        identified_topic: "Littérature contemporaine / Essai social",
-                        target_audience: "Universitaires, lecteurs passionnés d'histoire"
-                    },
-                    market_analysis: {
-                        global_presence_score: 8,
-                        algeria_presence_score: 9,
-                        market_saturation_level: "low",
-                        weighted_score: 8.5,
-                        comment: "Le sujet est très porteur en Algérie et manque de références récentes."
-                    },
-                    content_evaluation: {
-                        plagiarism_risk_percent: 2,
-                        literary_creativity_score: 9,
-                        linguistic_quality_score: 8,
-                        editorial_quality_score: 8,
-                        spelling_grammar_error_level: "low",
-                        weighted_score: 8.2,
-                        comment: "Style fluide et évocateur. Très peu de coquilles détectées."
-                    },
-                    author_evaluation: {
-                        digital_presence_score: 7,
-                        academic_level_score: 9,
-                        marketing_potential_score: 8,
-                        weighted_score: 8.0,
-                        comment: "Profil académique solide en phase avec la thématique."
-                    },
-                    final_evaluation: {
-                        overall_score: 8.3,
-                        strengths: ["Originalité du sujet", "Qualité de la langue", "Profil auteur"],
-                        weaknesses: ["Nécessite un plan marketing agressif"],
-                        risk_level: "low",
-                        final_recommendation: "publish",
-                        decision_justification: "Excellent potentiel commercial et littéraire. Recommandé pour publication immédiate."
-                    }
-                };
+            console.log(`Expertise IA: Appel de la fonction pour le manuscrit ${m.id}`);
 
-                const { error } = await supabase
-                    .from('publications')
-                    .update({
-                        ai_score: Math.round(mockReview.final_evaluation.overall_score),
-                        ai_detailed_review: mockReview,
-                        ai_status: 'completed'
-                    })
-                    .eq('id', m.id);
+            const { data, error: functionError } = await supabase.functions.invoke('evaluate-manuscript', {
+                body: { manuscriptId: m.id }
+            });
 
-                if (error) throw error;
-                fetchManuscripts();
-                setAnalyzingId(null);
-            }, 3000);
-        } catch (error) {
-            console.error(error);
+            if (functionError) throw functionError;
+
+            console.log("Expertise IA: Analyse terminée avec succès", data);
+
+            // Refresh manuscripts to show results
+            fetchManuscripts();
+            setAnalyzingId(null);
+        } catch (err) {
+            console.error("Erreur lors de l'expertise IA:", err);
+            setError("L'analyse a échoué : " + (err.message || "Erreur inconnue"));
             setAnalyzingId(null);
         }
     };
