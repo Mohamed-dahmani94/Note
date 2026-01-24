@@ -57,27 +57,130 @@ const AIEvaluationManager = () => {
         }
     };
 
+    const [provider, setProvider] = useState(() => localStorage.getItem('ai_provider') || 'gemini');
+    const [manualJson, setManualJson] = useState('');
+    const [showManualModal, setShowManualModal] = useState(null);
+    const [showSettings, setShowSettings] = useState(false);
+
+    // API Keys from LocalStorage
+    const [apiKeys, setApiKeys] = useState({
+        mistral: localStorage.getItem('key_mistral') || '',
+        openai: localStorage.getItem('key_openai') || '',
+        gemini: "AIzaSyBpLSKJRT8AKsBDr3u0xNGtOspey_Iax9g" // Default Gemini
+    });
+
+    const updateApiKey = (p, val) => {
+        setApiKeys(prev => ({ ...prev, [p]: val }));
+        localStorage.setItem(`key_${p}`, val);
+    };
+
     const handleRunAI = async (m) => {
         setAnalyzingId(m.id);
         setError(null);
         try {
-            console.log(`Expertise IA: Appel de la fonction pour le manuscrit ${m.id}`);
+            console.log(`Expertise IA V2.0: Utilisation de ${provider} pour ${m.id}`);
+            localStorage.setItem('ai_provider', provider);
 
-            const { data, error: functionError } = await supabase.functions.invoke('evaluate-manuscript', {
-                body: { manuscriptId: m.id }
-            });
+            const prompt = (customPrompt || "Analyze this manuscript and return JSON as requested:")
+                .replace("{{title}}", m.title_main || "")
+                .replace("{{summary}}", m.summary || "")
+                .replace("{{keywords}}", m.keywords || "")
+                .replace("{{author_profile}}", JSON.stringify(m.author_profile || {}));
 
-            if (functionError) throw functionError;
+            if (provider === 'manual') {
+                setShowManualModal({ manuscript: m, prompt: prompt });
+                setAnalyzingId(null);
+                return;
+            }
 
-            console.log("Expertise IA: Analyse terminée avec succès", data);
+            let aiResult = null;
 
-            // Refresh manuscripts to show results
-            fetchManuscripts();
+            if (provider === 'mistral') {
+                if (!apiKeys.mistral) throw new Error("Veuillez configurer votre clé Mistral dans les réglages (icône ⚙️).");
+                const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKeys.mistral}` },
+                    body: JSON.stringify({
+                        model: "mistral-small-latest",
+                        messages: [{ role: "user", content: prompt }],
+                        response_format: { type: "json_object" }
+                    })
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `Mistral Error ${response.status}`);
+                }
+                const data = await response.json();
+                aiResult = JSON.parse(data.choices[0].message.content);
+            } else if (provider === 'openai') {
+                if (!apiKeys.openai) throw new Error("Veuillez configurer votre clé OpenAI dans les réglages.");
+                const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKeys.openai}` },
+                    body: JSON.stringify({
+                        model: "gpt-4o-mini",
+                        messages: [{ role: "user", content: prompt }],
+                        response_format: { type: "json_object" }
+                    })
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `OpenAI Error ${response.status}`);
+                }
+                const data = await response.json();
+                aiResult = JSON.parse(data.choices[0].message.content);
+            } else if (provider === 'gemini') {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKeys.gemini}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { responseMimeType: "application/json" }
+                    })
+                });
+                if (!response.ok) throw new Error(`Gemini API Quota Error (429/400).`);
+                const data = await response.json();
+                let text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                text = text.replace(/```json\n?/, '').replace(/\n?```/, '').trim();
+                aiResult = JSON.parse(text);
+            }
+
+            if (aiResult) {
+                await updateManuscriptResult(m.id, aiResult);
+                fetchManuscripts();
+            }
             setAnalyzingId(null);
         } catch (err) {
-            console.error("Erreur lors de l'expertise IA:", err);
-            setError("L'analyse a échoué : " + (err.message || "Erreur inconnue"));
+            console.error("Expertise IA Error:", err);
+            setError(`L'IA (${provider}) a échoué : ${err.message}`);
             setAnalyzingId(null);
+        }
+    };
+
+    const updateManuscriptResult = async (id, result) => {
+        const { error: upErr } = await supabase
+            .from('publications')
+            .update({
+                ai_score: Math.round(result.final_evaluation?.overall_score || 0),
+                ai_detailed_review: result,
+                ai_status: 'completed'
+            })
+            .eq('id', id);
+        if (upErr) throw upErr;
+    };
+
+    const handleSaveManual = async () => {
+        try {
+            // Nettoyage Markdown au cas où l'utilisateur colle tout le bloc
+            let cleanJson = manualJson.replace(/```json\n?/, '').replace(/\n?```/, '').trim();
+            const result = JSON.parse(cleanJson);
+            await updateManuscriptResult(showManualModal.manuscript.id, result);
+            fetchManuscripts();
+            setShowManualModal(null);
+            setManualJson('');
+        } catch (e) {
+            alert("Erreur de format JSON. Assurez-vous de coller UNIQUEMENT le résultat JSON (entre les accolades { }).");
         }
     };
 
@@ -91,22 +194,152 @@ const AIEvaluationManager = () => {
 
     return (
         <div className="space-y-8 pb-12">
-            <div className="flex justify-between items-start">
+            <div className="flex flex-col md:flex-row justify-between items-start gap-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                         <BrainCircuit className="w-10 h-10 text-note-purple" />
-                        Système d'Expertise IA
+                        Système d'Expertise IA 2.0
                     </h1>
                     <p className="text-gray-500 mt-2 max-w-2xl">
-                        Analyse multicritère institutionnelle : Marché (30%), Qualité (40%), Profil Auteur (15%) et Benchmarking (15%).
+                        Choisissez votre moteur d'analyse. Mistral est conseillé pour sa stabilité gratuite. Usez du mode manuel en cas de blocage.
                     </p>
                 </div>
+
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setShowSettings(!showSettings)}
+                        className={`p-3 rounded-2xl border transition-all ${showSettings ? 'bg-note-purple text-white border-note-purple' : 'bg-white text-gray-400 border-gray-100 hover:border-note-purple hover:text-note-purple'}`}
+                        title="Réglages des clés API"
+                    >
+                        <BrainCircuit className="w-5 h-5" />
+                    </button>
+
+                    <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-400 px-3 uppercase">Moteur :</span>
+                        <select
+                            value={provider}
+                            onChange={(e) => setProvider(e.target.value)}
+                            className="bg-gray-50 border-none text-sm font-bold text-note-purple rounded-xl px-4 py-2 focus:ring-2 focus:ring-note-purple outline-none"
+                        >
+                            <option value="gemini">Google Gemini (Free Tier)</option>
+                            <option value="mistral">Mistral AI (Stable)</option>
+                            <option value="openai">OpenAI GPT-4o Mini</option>
+                            <option value="manual">Mode Manuel (Paste JSON)</option>
+                        </select>
+                    </div>
+                </div>
             </div>
+
+            {/* Settings Panel */}
+            {showSettings && (
+                <div className="bg-violet-50 rounded-3xl p-8 border border-violet-100 animate-in slide-in-from-top-4 duration-300">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="p-3 bg-white rounded-2xl shadow-sm text-note-purple">
+                            <BrainCircuit className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-black text-gray-900">Configuration des IA</h3>
+                            <p className="text-sm text-gray-500 font-medium">Configurez vos clés API pour une autonomie totale.</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Clé Mistral AI</label>
+                            <input
+                                type="password"
+                                value={apiKeys.mistral}
+                                onChange={(e) => updateApiKey('mistral', e.target.value)}
+                                placeholder="Collez votre clé mistral.ai"
+                                className="w-full bg-white border border-violet-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-note-purple outline-none transition-all"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Clé OpenAI</label>
+                            <input
+                                type="password"
+                                value={apiKeys.openai}
+                                onChange={(e) => updateApiKey('openai', e.target.value)}
+                                placeholder="sk-..."
+                                className="w-full bg-white border border-violet-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-note-purple outline-none transition-all"
+                            />
+                        </div>
+                    </div>
+                    <div className="mt-6 pt-6 border-t border-violet-100 text-[10px] text-violet-400 font-bold uppercase tracking-widest">
+                        Les clés sont sauvegardées localement dans votre navigateur uniquement.
+                    </div>
+                </div>
+            )}
 
             {error && (
                 <div className="bg-red-50 text-red-800 p-4 rounded-2xl border border-red-200 flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 mt-0.5" />
                     <div><h4 className="font-bold">Erreur Technique</h4><p className="text-sm">{error}</p></div>
+                </div>
+            )}
+
+            {/* Manual Entry Modal - ENHANCED */}
+            {showManualModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-6">
+                    <div className="bg-white rounded-[40px] w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
+                        <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+                            <div>
+                                <h3 className="text-2xl font-black text-gray-900 leading-tight">Expertise Manuelle : {showManualModal.manuscript.title_main}</h3>
+                                <p className="text-gray-500 text-sm font-medium">Bypassez les limites d'API en utilisant l'IA de votre choix (ChatGPT, Claude, etc.)</p>
+                            </div>
+                            <button onClick={() => setShowManualModal(null)} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-400">
+                                <XCircle className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* Step 1: Prompt Generation */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-8 h-8 rounded-full bg-note-purple text-white flex items-center justify-center text-xs font-black">1</div>
+                                    <h4 className="font-bold text-gray-900 uppercase text-xs tracking-widest">Générer le Prompt</h4>
+                                </div>
+                                <div className="relative group">
+                                    <textarea
+                                        readOnly
+                                        value={showManualModal.prompt}
+                                        className="w-full h-[400px] bg-gray-50 rounded-2xl p-6 font-mono text-[10px] text-gray-600 border border-gray-100 outline-none resize-none"
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(showManualModal.prompt);
+                                            alert("Prompt copié ! Collez-le maintenant dans ChatGPT ou Gemini.");
+                                        }}
+                                        className="absolute bottom-4 right-4 bg-white border border-gray-200 px-4 py-2 rounded-xl text-xs font-bold text-note-purple shadow-sm hover:bg-note-purple hover:text-white transition-all flex items-center gap-2"
+                                    >
+                                        <TrendingUp className="w-3 h-3" /> COPIER LE CODE AI
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-gray-400 italic">Ce code contient toutes les métadonnées du manuscrit et les instructions de formatage.</p>
+                            </div>
+
+                            {/* Step 2: Result Pasting */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-black">2</div>
+                                    <h4 className="font-bold text-gray-900 uppercase text-xs tracking-widest">Coller le Résultat (JSON)</h4>
+                                </div>
+                                <textarea
+                                    value={manualJson}
+                                    onChange={(e) => setManualJson(e.target.value)}
+                                    placeholder='Collez ici la réponse de l’IA (le bloc de code JSON)...'
+                                    className="w-full h-[400px] bg-emerald-50/30 rounded-2xl p-6 font-mono text-[10px] text-emerald-900 border border-emerald-100 focus:border-emerald-500 focus:bg-white transition-all outline-none resize-none"
+                                />
+                                <button
+                                    onClick={handleSaveManual}
+                                    disabled={!manualJson.trim()}
+                                    className="w-full bg-note-purple text-white py-4 rounded-2xl font-black shadow-lg shadow-purple-200 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:scale-100"
+                                >
+                                    ENREGISTRER LE RAPPORT INSTITUTIONNEL
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
