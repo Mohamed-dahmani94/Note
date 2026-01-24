@@ -14,6 +14,17 @@ const Login = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    // Redirect if already logged in
+    // Note: We don't redirect to /admin automatically here to avoid loops if not admin
+    // only if coming from a protected route or just manual navigation
+    /* 
+    useEffect(() => {
+        if (user) {
+           // Optional: navigate('/'); 
+        }
+    }, [user, navigate]);
+    */
+
     // Form States
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -23,17 +34,36 @@ const Login = () => {
         e.preventDefault();
         setError('');
         setLoading(true);
+        console.log("Login: Submit started");
 
         try {
             if (isLogin) {
-                await login(email, password);
-                navigate('/admin');
+                console.log("Login: Attempting sign in...");
+                const { user: authUser } = await login(email, password);
+                console.log("Login: Auth success!", authUser);
+
+                if (!authUser) throw new Error("Connexion réussie mais aucun utilisateur retourné.");
+
+                // Redirect based on role
+                const role = authUser.app_metadata?.role;
+                console.log("Login: Detected role:", role);
+
+                alert(`Connexion réussie ! Rôle: ${role || 'Aucun'}. Redirection...`);
+
+                if (role === 'admin') {
+                    console.log("Login: Redirecting to /admin");
+                    navigate('/admin');
+                } else {
+                    console.log("Login: Redirecting to /author");
+                    navigate('/author');
+                }
             } else {
                 await signup(email, password, fullName);
                 alert("Compte créé ! Vérifiez votre email.");
                 setIsLogin(true);
             }
         } catch (err) {
+            console.error("Login Error:", err);
             // Translate common Supabase errors if possible
             let msg = err.message;
             if (msg.includes("Invalid login credentials")) msg = t("error_invalid_credentials", { defaultValue: "Email ou mot de passe incorrect." });
@@ -138,13 +168,20 @@ const Login = () => {
                             />
                         </div>
 
+                        {/* Remember Me & Forgot Password */}
                         {isLogin && (
-                            <div className="text-right">
+                            <div className="flex items-center justify-between px-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" className="accent-note-purple w-4 h-4" defaultChecked />
+                                    <span className="text-sm text-gray-500">Rester connecté</span>
+                                </label>
                                 <a href="#" className="text-xs text-gray-400 hover:text-note-purple transition-colors">
                                     {t('forgot_password')}
                                 </a>
                             </div>
                         )}
+
+                        {/* Moved inside the flex container above */}
 
                         <button
                             type="submit"

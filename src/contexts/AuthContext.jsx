@@ -8,32 +8,34 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     const fetchProfile = async (authUser) => {
-        try {
-            // Short timeout (3s) for better perceived performance
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("Profile fetch timeout")), 3000)
-            );
+        // 1. TRUST THE TOKEN FIRST (The "Badge") - OPTIMISTIC LOGIN
+        const jwtRole = authUser.app_metadata?.role;
+        console.log("AuthProvider: JWT Role is:", jwtRole);
 
-            const dbQuery = supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', authUser.id)
-                .maybeSingle();
+        // CRITICAL FIX: Unlock the UI IMMEDIATELY. 
+        const basicUser = { ...authUser, role: jwtRole || 'author' };
+        setUser(basicUser);
+        setLoading(false);
 
-            const { data, error } = await Promise.race([dbQuery, timeoutPromise]);
+        // 2. Background Sync: Fire and Forget
+        // We do NOT await this promise, so the login function returns instantly.
+        (async () => {
+            try {
+                console.log("AuthProvider: Starting background profile sync...");
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', authUser.id)
+                    .maybeSingle();
 
-            if (data) {
-                setUser({ ...authUser, ...data });
-            } else {
-                setUser({ ...authUser, role: 'author' });
+                if (data) {
+                    console.log("AuthProvider: Profile sync complete.");
+                    setUser(prev => ({ ...prev, ...data, role: jwtRole || data.role }));
+                }
+            } catch (error) {
+                console.warn('AuthProvider: Background profile fetch warning:', error);
             }
-        } catch (error) {
-            console.error('Error fetching profile:', error);
-            // Fallback to minimal user content to allow access
-            setUser({ ...authUser, role: 'author' });
-        } finally {
-            setLoading(false);
-        }
+        })();
     };
 
     useEffect(() => {
@@ -43,6 +45,7 @@ export const AuthProvider = ({ children }) => {
         const initSession = async () => {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
+                console.log("AuthProvider: Init Session found:", !!session);
                 if (session?.user) {
                     if (mounted) await fetchProfile(session.user);
                 } else {
@@ -56,13 +59,25 @@ export const AuthProvider = ({ children }) => {
         initSession();
 
         // 2. Auth State Listener
+        // 2. Auth State Listener (Robust handling)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_IN' && session?.user && !user) {
-                if (mounted) await fetchProfile(session.user);
+            console.log("AuthProvider: Auth Event:", event);
+
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+                // If we have a valid session, ensure our App State is in sync
+                // especially for Token Refreshes (which update the JWT role)
+                if (session?.user && mounted) {
+                    // Check if we actually need to update (avoid infinite loops if user obj is same)
+                    // But since we decorate 'user' with DB data, we should re-sync.
+                    // fetchProfile handles the merging and is now optimistic (fast).
+                    await fetchProfile(session.user);
+                }
             } else if (event === 'SIGNED_OUT') {
                 if (mounted) {
                     setUser(null);
                     setLoading(false);
+                    // Clear any sensitive local storage if needed beyond Supabase's default
+                    localStorage.removeItem('supabase.auth.token'); // Cleanup helper
                 }
             }
         });
@@ -76,6 +91,13 @@ export const AuthProvider = ({ children }) => {
     const login = async (email, password) => {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+
+        // Critical: Manually update state immediately to prevent race conditions during navigation
+        // The listener will also fire, but we ensure 'user' is set here first.
+        if (data?.user) {
+            await fetchProfile(data.user);
+        }
+
         return data;
     };
 
