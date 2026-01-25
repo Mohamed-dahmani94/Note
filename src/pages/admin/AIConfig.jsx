@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../supabaseClient';
+import { supabase } from '../../supabaseClient.js';
 import { Settings, Save, RotateCcw, Info, CheckCircle, AlertCircle } from 'lucide-react';
 
 const AIConfig = () => {
@@ -66,6 +66,7 @@ const AIConfig = () => {
                     <p className="text-gray-500 mt-1">Personnalisez la manière dont l'IA analyse et note les manuscrits.</p>
                 </div>
                 <button
+                    type="button"
                     onClick={handleSave}
                     disabled={saving}
                     className="bg-note-purple hover:bg-violet-700 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
@@ -99,11 +100,37 @@ const AIConfig = () => {
                     <div className="text-sm text-blue-800 space-y-2">
                         <p className="font-bold">Variables disponibles :</p>
                         <ul className="list-disc list-inside space-y-1 opacity-80">
-                            <li><code>{"{{title}}"}</code> : Titre principal du manuscrit</li>
-                            <li><code>{"{{summary}}"}</code> : Sommaire / Résumé court</li>
-                            <li><code>{"{{keywords}}"}</code> : Mots-clés fournis</li>
-                            <li><code>{"{{content}}"}</code> : Texte extrait du fichier (si disponible)</li>
-                            <li><code>{"{{author_profile}}"}</code> : Biographie et infos de l'auteur</li>
+                            <li><code>{"{{title}}"}</code> : Titre principal</li>
+                            <li><code>{"{{title_secondary}}"}</code> : Titre secondaire</li>
+                            <li><code>{"{{summary}}"}</code> : Sommaire</li>
+                            <li><code>{"{{abstract}}"}</code> : Résumé global</li>
+                            <li><code>{"{{keywords}}"}</code> : Mots-clés</li>
+                            <li><code>{"{{full_text}}"}</code> : Texte intégral pour l'IA</li>
+                            
+                            <li><code>{"{{co_authors}}"}</code> : Liste des co-auteurs (JSON)</li>
+                            
+                            {/* Author Details */}
+                            <li><code>{"{{author_profile}}"}</code> : Profil complet (JSON)</li>
+                            <li><code>{"{{author_full_name}}"}</code> : Nom complet</li>
+                            <li><code>{"{{author_nationality}}"}</code> : Nationalité</li>
+                            <li><code>{"{{author_birth_date}}"}</code> : Date de naissance</li>
+                            <li><code>{"{{author_birth_place}}"}</code> : Lieu de naissance</li>
+                            <li><code>{"{{author_address}}"}</code> : Adresse</li>
+                            <li><code>{"{{author_phone}}"}</code> : Téléphone</li>
+                            <li><code>{"{{author_id_card}}"}</code> : Numéro CNI/Passeport</li>
+                            
+                            {/* Tech Details */}
+                            <li><code>{"{{isbn}}"}</code> : ISBN</li>
+                            <li><code>{"{{language}}"}</code> : Langue</li>
+                            <li><code>{"{{publisher_1}}"}</code> / <code>{"{{publisher_2}}"}</code> : Éditeurs</li>
+                            <li><code>{"{{publication_year}}"}</code> : Année</li>
+                            <li><code>{"{{collection_title}}"}</code> : Collection</li>
+                            <li><code>{"{{collection_number}}"}</code> : N° Collection</li>
+                            <li><code>{"{{page_count}}"}</code> : Pages</li>
+                            <li><code>{"{{volume_count}}"}</code> : Tomes</li>
+                            <li><code>{"{{format}}"}</code> : Format</li>
+                            <li><code>{"{{illustrations}}"}</code> : Illustrations</li>
+                            <li><code>{"{{editor_name}}"}</code> : Éditeur (Responsable)</li>
                         </ul>
                         <p className="mt-2 text-xs opacity-70 italic">Note : L'IA doit impérativement répondre au format JSON pour que l'interface puisse afficher les scores.</p>
                     </div>

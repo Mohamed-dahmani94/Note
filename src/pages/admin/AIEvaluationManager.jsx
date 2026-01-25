@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../supabaseClient';
-import { BrainCircuit, Star, FileText, User, Activity, AlertCircle, TrendingUp, BookOpen, Users, Flag, CheckCircle2, XCircle } from 'lucide-react';
+import { supabase } from '../../supabaseClient.js';
+import { BrainCircuit, User, Activity, AlertCircle, TrendingUp, BookOpen, Users, Flag, CheckCircle2, XCircle } from 'lucide-react';
 
 const AIEvaluationManager = () => {
     const [manuscripts, setManuscripts] = useState([]);
@@ -81,11 +81,174 @@ const AIEvaluationManager = () => {
             console.log(`Expertise IA V2.0: Utilisation de ${provider} pour ${m.id}`);
             localStorage.setItem('ai_provider', provider);
 
-            const prompt = (customPrompt || "Analyze this manuscript and return JSON as requested:")
+            const defaultPrompt = `SYSTEM ROLE:
+أنت نظام تقييم مؤسسي لدار نشر محترفة.
+
+OBJECTIF:
+- تحليل سوق الكتاب
+- النقد الأدبي
+- التدقيق اللغوي
+- تقييم المؤلفين
+- دعم قرار النشر آليًا
+
+LANGUAGE MODE (STRICT):
+- إذا كان المحتوى عربيًا → جميع القيم النصية في JSON بالعربية
+- إذا كان المحتوى فرنسيًا → جميع القيم النصية في JSON بالفرنسية
+- إذا كان المحتوى إنجليزيًا → جميع القيم النصية في JSON بالإنجليزية
+- يجب أن تطابق لغة الإخراج لغة المحتوى الأساسي
+- لا تخلط اللغات داخل نفس الحقول
+
+INPUT VARIABLES:
+- {{title}} : Titre principal
+- {{title_secondary}} : Titre secondaire
+- {{summary}} : Sommaire
+- {{abstract}} : Résumé global
+- {{keywords}} : Mots-clés
+- {{full_text}} : Texte intégral pour l'IA
+- {{co_authors}} : Liste des co-auteurs (JSON)
+- {{author_profile}} : Profil complet (JSON)
+- {{author_full_name}} : Nom complet
+- {{author_birth_date}} : Date de naissance
+- {{isbn}} : ISBN
+- {{language}} : Langue
+- {{publisher_1}} / {{publisher_2}} : Éditeurs
+- {{publication_year}} : Année
+- {{collection_title}} : Collection
+- {{collection_number}} : N° Collection
+- {{page_count}} : Pages
+- {{volume_count}} : Tomes
+- {{format}} : Format
+- {{illustrations}} : Illustrations
+- {{editor_name}} : Éditeur (Responsable)
+
+TASK:
+قيّم المخطوط بدقة عالية وفق المنهجية المحددة أدناه.
+
+CRITICAL OUTPUT RULES (MANDATORY):
+- الإخراج يجب أن يكون JSON صالح 100%
+- ممنوع أي نص خارج JSON
+- ممنوع الشرح أو التقديم أو الخاتمة
+- ممنوع Markdown
+- ممنوع التعليقات
+- استخدم القيم الافتراضية (0 أو "" أو []) إذا كانت المعلومة غير متوفرة
+- احترم أسماء المفاتيح EXACTLY كما هي
+- جميع القيم الرقمية من 0 إلى 10 (إلا إذا ذُكر غير ذلك)
+
+==================================================
+SCORING WEIGHTING SYSTEM (MANDATORY)
+==================================================
+- Content Quality & Originality        → 40%
+- Market & Topic Relevance              → 30%
+- Author Profile & Digital Presence     → 15%
+- Benchmarking & Competitive Position   → 15%
+
+Final Score = weighted average (0 – 10)
+
+==================================================
+EVALUATION METHODOLOGY
+==================================================
+1) Topic & Market Analysis (30%)
+2) Benchmarking (15%)
+3) Content Evaluation (40%)
+4) Author Assessment (15%)
+5) Publishing Decision
+
+==================================================
+DECISION RULES (STRICT)
+==================================================
+- overall_score ≥ 7.5  → publish
+- 5.5 ≤ overall_score < 7.5 → publish_with_revisions
+- overall_score < 5.5 → reject
+
+==================================================
+OUTPUT FORMAT (JSON ONLY – NO EXTRA TEXT)
+==================================================
+{
+  "language_detected": "ar | fr | en",
+  "manuscript": {
+    "title": "{{title}}",
+    "identified_topic": "",
+    "target_audience": ""
+  },
+  "market_analysis": {
+    "global_presence_score": 0,
+    "algeria_presence_score": 0,
+    "market_saturation_level": "low | medium | high",
+    "weighted_score": 0,
+    "comment": ""
+  },
+  "benchmarking": {
+    "similar_works": [
+      {
+        "title": "",
+        "author": "",
+        "year": "",
+        "region": "global | arab | algeria",
+        "strengths": ""
+      }
+    ],
+    "comparative_score": 0,
+    "weighted_score": 0,
+    "comment": ""
+  },
+  "content_evaluation": {
+    "plagiarism_risk_percent": 0,
+    "literary_creativity_score": 0,
+    "linguistic_quality_score": 0,
+    "editorial_quality_score": 0,
+    "spelling_grammar_error_level": "low | medium | high",
+    "weighted_score": 0,
+    "comment": ""
+  },
+  "author_evaluation": {
+    "digital_presence_score": 0,
+    "academic_level_score": 0,
+    "marketing_potential_score": 0,
+    "weighted_score": 0,
+    "comment": ""
+  },
+  "final_evaluation": {
+    "overall_score": 0,
+    "strengths": [],
+    "weaknesses": [],
+    "risk_level": "low | medium | high",
+    "final_recommendation": "publish | publish_with_revisions | reject",
+    "decision_justification": ""
+  }
+}`;
+
+            const prompt = (customPrompt || defaultPrompt)
                 .replace("{{title}}", m.title_main || "")
                 .replace("{{summary}}", m.summary || "")
                 .replace("{{keywords}}", m.keywords || "")
-                .replace("{{author_profile}}", JSON.stringify(m.author_profile || {}));
+                .replace("{{full_text}}", m.full_text || "Non fourni")
+                .replace("{{co_authors}}", JSON.stringify(m.co_authors || []))
+                .replace("{{author_profile}}", JSON.stringify(m.author_profile || {}))
+                
+                // Detailed Publication Info
+                .replace("{{title_secondary}}", m.title_secondary || "")
+                .replace("{{abstract}}", m.abstract || "")
+                .replace("{{isbn}}", m.isbn || "")
+                .replace("{{language}}", m.language || "")
+                .replace("{{collection_title}}", m.collection_title || "")
+                .replace("{{collection_number}}", m.collection_number || "")
+                .replace("{{publisher_1}}", m.publisher_1 || "")
+                .replace("{{publisher_2}}", m.publisher_2 || "")
+                .replace("{{publication_year}}", m.publication_year || "")
+                .replace("{{volume_count}}", m.volume_count || "")
+                .replace("{{page_count}}", m.page_count || "")
+                .replace("{{format}}", m.format || "")
+                .replace("{{illustrations}}", m.illustrations || "")
+                .replace("{{editor_name}}", m.editor_name || "")
+
+                // Detailed Author Info
+                .replace("{{author_full_name}}", m.author_profile?.full_name || "")
+                .replace("{{author_nationality}}", m.author_profile?.nationality || "")
+                .replace("{{author_birth_date}}", m.author_profile?.birth_date || "")
+                .replace("{{author_birth_place}}", m.author_profile?.birth_place || "")
+                .replace("{{author_address}}", m.author_profile?.address || "")
+                .replace("{{author_phone}}", m.author_profile?.phone || "")
+                .replace("{{author_id_card}}", m.author_profile?.id_card_number || "");
 
             if (provider === 'manual') {
                 setShowManualModal({ manuscript: m, prompt: prompt });
@@ -172,15 +335,109 @@ const AIEvaluationManager = () => {
 
     const handleSaveManual = async () => {
         try {
-            // Nettoyage Markdown au cas où l'utilisateur colle tout le bloc
-            let cleanJson = manualJson.replace(/```json\n?/, '').replace(/\n?```/, '').trim();
-            const result = JSON.parse(cleanJson);
+            // 1. Extract JSON strictly
+            let cleanJson = manualJson;
+            
+            // Try extracting from markdown code blocks first
+            const jsonBlockMatch = manualJson.match(/```json\s*([\s\S]*?)\s*```/);
+            if (jsonBlockMatch) {
+                cleanJson = jsonBlockMatch[1];
+            } else {
+                // Fallback: Find first '{' and last '}'
+                const firstBrace = manualJson.indexOf('{');
+                const lastBrace = manualJson.lastIndexOf('}');
+                
+                if (firstBrace !== -1 && lastBrace !== -1) {
+                    cleanJson = manualJson.substring(firstBrace, lastBrace + 1);
+                }
+            }
+
+            // 2. Parse
+            let result;
+            try {
+                result = JSON.parse(cleanJson);
+            } catch (_e) {
+                throw new Error("Impossible de lire le JSON. Vérifiez qu'il s'agit bien d'un format JSON valide.");
+            }
+
+            // 3. Relaxed Validation & Normalization
+            if (!result.final_evaluation) {
+                result.final_evaluation = {};
+            }
+
+            // Fuzzy Score Search Helper (Recursive)
+            const findScore = (obj) => {
+                if (!obj || typeof obj !== 'object') return undefined;
+                
+                const targets = ['overall_score', 'score', 'total_score', 'rating', 'note', 'valeur', 'resultat', 'التقييم_العام', 'النتيجة_النهائية', 'الدرجة', 'تقييم', 'المجموع', 'total'];
+                
+                // 1. Exact Match
+                for (const t of targets) {
+                     // Check regex partial match for Arabic keys sometimes having hidden chars? No, simple access first.
+                     if (obj[t] !== undefined) return obj[t];
+                }
+
+                // 2. Look inside specific sub-objects (common in custom prompts)
+                const subOne = obj['final_evaluation'] || obj['نظام_التنقيط'] || obj['evaluation'];
+                if (subOne) {
+                    // Avoid infinite recursion if circular (unlikely in JSON)
+                    for (const t of targets) {
+                        if (subOne[t] !== undefined) return subOne[t];
+                    }
+                }
+
+                // 3. Key Partial Match
+                const keys = Object.keys(obj);
+                const match = keys.find(k => {
+                    const low = k.toLowerCase();
+                    return low.includes('score') || low.includes('rate') || low.includes('note') || low.includes('تقييم');
+                });
+                if (match && typeof obj[match] === 'number') return obj[match];
+
+                return undefined;
+            };
+
+            let score = findScore(result);
+
+            if (typeof score === 'undefined') {
+                 console.log("Failed to find score. Keys:", Object.keys(result));
+                 throw new Error(`Score introuvable. J'ai cherché 'score', 'المجموع', 'rating' etc. mais rien trouvé.`);
+            }
+
+            // Normalize Score (handle "8.5/10" or strings)
+            if (typeof score === 'string') {
+                score = parseFloat(score.split('/')[0].replace(',', '.'));
+            }
+            
+            // Handle /100 scale
+            if (score > 10 && score <= 100) {
+                score = score / 10;
+            }
+
+            // Ensure 0-10 range
+            result.final_evaluation.overall_score = Math.min(Math.max(score, 0), 10);
+            
+            // Map Arabic Recommendation to English if needed
+            if (!result.final_evaluation.final_recommendation) {
+                const rec = result['قرار_النشر']?.['القرار'] || result['recommendation'];
+                if (rec) {
+                    if (rec.includes('مقبول') || rec.includes('publish')) result.final_evaluation.final_recommendation = 'publish';
+                    else if (rec.includes('تعديل') || rec.includes('revision')) result.final_evaluation.final_recommendation = 'publish_with_revisions';
+                    else result.final_evaluation.final_recommendation = 'reject';
+                }
+            }
+
+            // 4. Save
             await updateManuscriptResult(showManualModal.manuscript.id, result);
             fetchManuscripts();
+            
             setShowManualModal(null);
             setManualJson('');
-        } catch (e) {
-            alert("Erreur de format JSON. Assurez-vous de coller UNIQUEMENT le résultat JSON (entre les accolades { }).");
+            alert("Analyse manuelle enregistrée avec succès !");
+
+        } catch (err) {
+            console.error(err);
+            alert(`Erreur : ${err.message}`);
         }
     };
 
@@ -207,6 +464,7 @@ const AIEvaluationManager = () => {
 
                 <div className="flex items-center gap-3">
                     <button
+                        type="button"
                         onClick={() => setShowSettings(!showSettings)}
                         className={`p-3 rounded-2xl border transition-all ${showSettings ? 'bg-note-purple text-white border-note-purple' : 'bg-white text-gray-400 border-gray-100 hover:border-note-purple hover:text-note-purple'}`}
                         title="Réglages des clés API"
@@ -287,7 +545,7 @@ const AIEvaluationManager = () => {
                                 <h3 className="text-2xl font-black text-gray-900 leading-tight">Expertise Manuelle : {showManualModal.manuscript.title_main}</h3>
                                 <p className="text-gray-500 text-sm font-medium">Bypassez les limites d'API en utilisant l'IA de votre choix (ChatGPT, Claude, etc.)</p>
                             </div>
-                            <button onClick={() => setShowManualModal(null)} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-400">
+                            <button onClick={() => setShowManualModal(null)} type="button" className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-400">
                                 <XCircle className="w-6 h-6" />
                             </button>
                         </div>
@@ -306,6 +564,7 @@ const AIEvaluationManager = () => {
                                         className="w-full h-[400px] bg-gray-50 rounded-2xl p-6 font-mono text-[10px] text-gray-600 border border-gray-100 outline-none resize-none"
                                     />
                                     <button
+                                        type="button"
                                         onClick={() => {
                                             navigator.clipboard.writeText(showManualModal.prompt);
                                             alert("Prompt copié ! Collez-le maintenant dans ChatGPT ou Gemini.");
@@ -331,6 +590,7 @@ const AIEvaluationManager = () => {
                                     className="w-full h-[400px] bg-emerald-50/30 rounded-2xl p-6 font-mono text-[10px] text-emerald-900 border border-emerald-100 focus:border-emerald-500 focus:bg-white transition-all outline-none resize-none"
                                 />
                                 <button
+                                    type="button"
                                     onClick={handleSaveManual}
                                     disabled={!manualJson.trim()}
                                     className="w-full bg-note-purple text-white py-4 rounded-2xl font-black shadow-lg shadow-purple-200 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:scale-100"
@@ -370,9 +630,9 @@ const AIEvaluationManager = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col items-center md:items-end gap-3 min-w-[200px]">
-                                    {m.ai_status === 'completed' ? (
-                                        <div className="text-right">
+                                    <div className="flex flex-col items-center md:items-end gap-3 min-w-[200px]">
+                                    {m.ai_status === 'completed' && (
+                                        <div className="text-right mb-2">
                                             <div className="flex items-center gap-2 mb-1 justify-end">
                                                 <span className="text-4xl font-black text-note-purple">{review?.final_evaluation?.overall_score}</span>
                                                 <span className="text-gray-300 text-lg">/10</span>
@@ -381,16 +641,18 @@ const AIEvaluationManager = () => {
                                                 {review?.final_evaluation?.final_recommendation?.replace(/_/g, ' ')}
                                             </span>
                                         </div>
-                                    ) : (
-                                        <button
-                                            onClick={() => handleRunAI(m)}
-                                            disabled={analyzingId !== null}
-                                            className="bg-note-purple text-white px-8 py-3 rounded-2xl font-black text-sm hover:bg-violet-700 transition-all hover:scale-105 active:scale-95 disabled:bg-gray-100 disabled:text-gray-400"
-                                        >
-                                            {analyzingId === m.id ? 'ANALYSES EN COURS...' : 'LANCER L\'EXPERTISE'}
-                                        </button>
                                     )}
+                                    
                                     <button
+                                        type="button"
+                                        onClick={() => handleRunAI(m)}
+                                        disabled={analyzingId !== null}
+                                        className={`px-6 py-2 rounded-2xl font-black text-xs transition-all hover:scale-105 active:scale-95 disabled:bg-gray-100 disabled:text-gray-400 ${m.ai_status === 'completed' ? 'bg-white border-2 border-note-purple text-note-purple hover:bg-note-purple hover:text-white' : 'bg-note-purple text-white shadow-lg shadow-purple-200'}`}
+                                    >
+                                        {analyzingId === m.id ? 'ANALYSE EN COURS...' : (m.ai_status === 'completed' ? 'RELANCER L\'ANALYSE' : 'LANCER L\'EXPERTISE')}
+                                    </button>
+                                    <button
+                                        type="button"
                                         onClick={() => setExpandedReview(isExpanded ? null : m.id)}
                                         className="text-xs font-bold text-gray-400 hover:text-note-purple flex items-center gap-1"
                                     >

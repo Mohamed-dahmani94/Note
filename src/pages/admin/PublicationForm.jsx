@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { supabase } from '../../supabaseClient';
-import { useAuth } from '../../contexts/AuthContext';
-import { Save, ArrowLeft, X, Printer, CheckCircle, Upload } from 'lucide-react';
+import { supabase } from '../../supabaseClient.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
+import { Save, Printer, CheckCircle, Upload, Plus, Trash } from 'lucide-react';
 
 const PublicationForm = () => {
     const navigate = useNavigate();
@@ -27,9 +27,8 @@ const PublicationForm = () => {
         collection_number: '',
         main_author_name: '',
         main_author_firstname: '',
-        author_2_name: '',
-        author_2_firstname: '',
-        author_2_role: 'Préparation',
+        // Co-authors array instead of individual fields
+        co_authors: [], 
         page_count: '',
         illustrations: '',
         volume_count: '',
@@ -41,6 +40,34 @@ const PublicationForm = () => {
         date_depot: null
     });
 
+    // ... (rest of the code until around line 440) ...
+
+    // Helper to manage co-authors
+    const addCoAuthor = () => {
+        if (formData.co_authors.length >= 5) return;
+        setFormData(prev => ({
+            ...prev,
+            co_authors: [...prev.co_authors, { name: '', firstname: '', role: 'Préparation' }]
+        }));
+    };
+
+    const removeCoAuthor = (index) => {
+        setFormData(prev => ({
+            ...prev,
+            co_authors: prev.co_authors.filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleCoAuthorChange = (index, field, value) => {
+        const newAuthors = [...formData.co_authors];
+        newAuthors[index] = { ...newAuthors[index], [field]: value };
+        setFormData(prev => ({ ...prev, co_authors: newAuthors }));
+    };
+
+    // ... (rest of imports and setup)
+
+
+
     // Check permissions
     const isAuthor = user?.app_metadata?.role === 'author';
     // Locked if author AND status is NOT 'en saisie'
@@ -51,6 +78,23 @@ const PublicationForm = () => {
             fetchPublication();
         }
     }, [id]);
+
+    useEffect(() => {
+        // Auto-fill author name for new publications
+        if (!id && user) {
+            const fullName = user.user_metadata?.full_name || '';
+            // Simple split for demo purposes (Last First)
+            const parts = fullName.split(' ');
+            const lastName = parts[0] || '';
+            const firstName = parts.slice(1).join(' ') || '';
+            
+            setFormData(prev => ({
+                ...prev,
+                main_author_name: lastName,
+                main_author_firstname: firstName
+            }));
+        }
+    }, [id, user]);
 
     const fetchPublication = async () => {
         setLoading(true);
@@ -99,18 +143,21 @@ const PublicationForm = () => {
         return filePath;
     };
 
-    const downloadFile = async (path, type) => {
+    const downloadFile = async (path) => {
         try {
             const { data, error } = await supabase.storage
                 .from('manuscripts')
                 .createSignedUrl(path, 60); // Valid for 60 seconds
 
             if (error) throw error;
-            window.open(data.signedUrl, '_blank');
+            globalThis.open(data.signedUrl, '_blank');
         } catch (err) {
             alert("Erreur lors du téléchargement: " + err.message);
         }
     };
+
+    // UI State for Full Text toggle
+    const [isFullTextOpen, setIsFullTextOpen] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -139,22 +186,29 @@ const PublicationForm = () => {
                 file_pdf_url: pdfPath
             };
 
-            let result;
+            let savedData;
             if (id) {
                 // UPDATE
-                result = await supabase
+                const { data, error } = await supabase
                     .from('publications')
                     .update(dataToSave)
-                    .eq('id', id);
+                    .eq('id', id)
+                    .select(); // Select to ensure we get data back if needed, mainly consistency
+                
+                if (error) throw error;
+                savedData = data;
             } else {
                 // INSERT
-                // Add user_id so RLS allows it and we track ownership
-                result = await supabase
+                const { data, error } = await supabase
                     .from('publications')
-                    .insert([{ ...dataToSave, user_id: user.id }]);
+                    .insert([{ ...dataToSave, user_id: user.id }])
+                    .select(); // CRITICAL: Get the new ID
+                
+                if (error) throw error;
+                savedData = data;
             }
 
-            if (result.error) throw result.error;
+            const pubId = id || (savedData && savedData[0]?.id);
 
             alert("Publication sauvegardée avec succès !");
 
@@ -271,7 +325,7 @@ const PublicationForm = () => {
     };
 
     const handlePrint = () => {
-        window.print();
+        globalThis.print();
     };
 
     // Check admin role for showing validation button
@@ -289,6 +343,7 @@ const PublicationForm = () => {
                     {/* Admin Validation Button */}
                     {isAdmin && id && (
                         <button
+                            type="button"
                             onClick={handleAdminValidation}
                             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium flex items-center gap-2"
                         >
@@ -298,6 +353,7 @@ const PublicationForm = () => {
 
                     {/* Print Button - Visible to EVERYONE (Author & Admin) */}
                     <button
+                        type="button"
                         onClick={handlePrint}
                         className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded shadow-sm text-sm font-medium flex items-center gap-2"
                         title="Imprimer"
@@ -307,6 +363,7 @@ const PublicationForm = () => {
 
                     {!isLocked && (
                         <button
+                            type="submit"
                             onClick={handleSubmit}
                             disabled={loading}
                             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow-sm flex items-center gap-2 text-sm font-medium"
@@ -318,6 +375,7 @@ const PublicationForm = () => {
                     {/* Show Validation Request Button for Authors only if Draft */}
                     {isAuthor && formData.position === 'en saisie' && id && (
                         <button
+                            type="button"
                             onClick={handleRequestValidation}
                             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium"
                         >
@@ -326,6 +384,7 @@ const PublicationForm = () => {
                     )}
 
                     <button
+                        type="button"
                         onClick={() => navigate(isAuthor ? '/author' : '/admin/content')}
                         className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded shadow-sm text-sm font-medium"
                     >
@@ -382,14 +441,119 @@ const PublicationForm = () => {
                             />
                         </div>
 
+                        {/* === RE-ORGANIZED: AUTHORS SECTION === */}
+                        <div className="border-t pt-4 mt-6 border-blue-100 bg-blue-50/50 p-4 rounded-xl">
+                            <h3 className="font-bold text-blue-800 mb-3 flex items-center gap-2">
+                                <span className="w-1 h-4 bg-blue-500 rounded-full"></span>
+                                Informations Auteurs
+                            </h3>
+                            
+                            {/* Main Author */}
+                            <div className="space-y-4">
+                                <label className="text-sm font-bold text-gray-700 block bg-white/50 px-2 py-1 rounded inline-block">Auteur principal</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs text-gray-500">Nom *</label>
+                                        <input
+                                            name="main_author_name"
+                                            value={formData.main_author_name}
+                                            onChange={handleChange}
+                                            className="w-full bg-white border border-blue-300 rounded px-3 py-1.5"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs text-gray-500">Prénom *</label>
+                                        <input
+                                            name="main_author_firstname"
+                                            value={formData.main_author_firstname}
+                                            onChange={handleChange}
+                                            className="w-full bg-white border border-blue-300 rounded px-3 py-1.5"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Co-Authors Dynamic List */}
+                            <div className="mt-4 pt-4 border-t border-blue-100">
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="text-sm font-bold text-gray-700 block bg-white/50 px-2 py-1 rounded inline-block">
+                                        Co-Auteurs (Max 5)
+                                    </label>
+                                    {formData.co_authors.length < 5 && (
+                                        <button
+                                            type="button"
+                                            onClick={addCoAuthor}
+                                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded flex items-center gap-1"
+                                            disabled={isLocked}
+                                        >
+                                            <Plus className="w-3 h-3" /> Ajouter
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="space-y-3">
+                                    {formData.co_authors.map((author, index) => (
+                                        <div key={index} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_30px] gap-2 items-end bg-white p-2 rounded border border-blue-100">
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-[10px] text-gray-500">Nom</label>
+                                                <input
+                                                    value={author.name}
+                                                    onChange={(e) => handleCoAuthorChange(index, 'name', e.target.value)}
+                                                    className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm"
+                                                    placeholder="Nom"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-[10px] text-gray-500">Prénom</label>
+                                                <input
+                                                    value={author.firstname}
+                                                    onChange={(e) => handleCoAuthorChange(index, 'firstname', e.target.value)}
+                                                    className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm"
+                                                    placeholder="Prénom"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-[10px] text-gray-500">Fonction</label>
+                                                <select
+                                                    value={author.role}
+                                                    onChange={(e) => handleCoAuthorChange(index, 'role', e.target.value)}
+                                                    className="w-full bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm"
+                                                >
+                                                    <option>Préparation</option>
+                                                    <option>Traduction</option>
+                                                    <option>Illustration</option>
+                                                    <option>Co-auteur</option>
+                                                </select>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeCoAuthor(index)}
+                                                className="text-red-500 hover:bg-red-50 p-1 rounded mb-0.5"
+                                                title="Supprimer"
+                                                disabled={isLocked}
+                                            >
+                                                <Trash className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {formData.co_authors.length === 0 && (
+                                        <p className="text-xs text-gray-400 italic text-center py-2">Aucun co-auteur ajouté.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+
                         {/* Language */}
-                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
+                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4 mt-6">
                             <label className="text-gray-500">Langue</label>
                             <select
                                 name="language"
                                 value={formData.language}
                                 onChange={handleChange}
-                                className="w-40 bg-white border border-blue-300 rounded px-3 py-1.5"
+                                className="w-full sm:w-40 bg-white border border-blue-300 rounded px-3 py-1.5"
                             >
                                 <option>Arabe</option>
                                 <option>Français</option>
@@ -398,96 +562,142 @@ const PublicationForm = () => {
                         </div>
 
                         {/* Publication Details */}
-                        <div className="space-y-2 mt-4">
-                            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
-                                <label className="text-gray-500">Publication :</label>
-                                <div className="flex gap-4 items-center w-full">
-                                    <span className="text-gray-500 w-16">Éditeur *</span>
-                                    <input
-                                        name="publisher_1"
-                                        value={formData.publisher_1}
-                                        onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
-                                    />
+                        {(isAdmin || formData.publisher_1 || formData.place_1 || formData.publisher_2 || formData.place_2 || formData.publication_year) && (
+                            <div className="space-y-4 mt-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <h3 className="font-bold text-gray-600 mb-2">Données de l'édition (Réservé Admin)</h3>
+                                
+                                {/* First Line: Publisher 1 & Place 1 */}
+                                <div className="flex flex-col sm:flex-row gap-4">
+                                    {(isAdmin || formData.publisher_1) && (
+                                        <div className="flex-1 flex flex-col gap-1">
+                                            <label className="text-xs text-gray-500">Éditeur *</label>
+                                            {isAdmin ? (
+                                                <input
+                                                    name="publisher_1"
+                                                    value={formData.publisher_1}
+                                                    onChange={handleChange}
+                                                    className="w-full bg-white border border-blue-300 rounded px-3 py-1.5"
+                                                />
+                                            ) : (
+                                                <div className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-gray-700">
+                                                    {formData.publisher_1}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    
+                                    {(isAdmin || formData.place_1) && (
+                                        <div className="w-full sm:w-40 flex flex-col gap-1">
+                                            <label className="text-xs text-gray-500">Lieu *</label>
+                                            {isAdmin ? (
+                                                <input
+                                                    name="place_1"
+                                                    value={formData.place_1}
+                                                    onChange={handleChange}
+                                                    className="w-full bg-white border border-blue-300 rounded px-3 py-1.5"
+                                                />
+                                            ) : (
+                                                <div className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-gray-700">
+                                                    {formData.place_1}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
-                                <div></div> {/* Spacer */}
-                                <div className="flex gap-4 items-center w-full">
-                                    <span className="text-gray-500 w-16">Lieu *</span>
-                                    <input
-                                        name="place_1"
-                                        value={formData.place_1}
-                                        onChange={handleChange}
-                                        className="w-40 bg-white border border-blue-300 rounded px-3 py-1.5"
-                                    />
-                                </div>
-                            </div>
 
-                            {/* Second Publisher Line */}
-                            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4 mt-2">
-                                <div></div> {/* Spacer */}
-                                <div className="flex gap-4 items-center w-full">
-                                    <span className="text-gray-500 w-16">Éditeur</span>
-                                    <input
-                                        name="publisher_2"
-                                        value={formData.publisher_2}
-                                        onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
-                                    />
-                                </div>
+                                {/* Second Line: Publisher 2, Place 2, Year */}
+                                {(isAdmin || formData.publisher_2 || formData.place_2 || formData.publication_year) && (
+                                    <div className="flex flex-col sm:flex-row gap-4">
+                                        {(isAdmin || formData.publisher_2) && (
+                                            <div className="flex-1 flex flex-col gap-1">
+                                                <label className="text-xs text-gray-500">Co-Éditeur</label>
+                                                {isAdmin ? (
+                                                    <input
+                                                        name="publisher_2"
+                                                        value={formData.publisher_2}
+                                                        onChange={handleChange}
+                                                        className="w-full bg-white border border-blue-300 rounded px-3 py-1.5"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-gray-700">
+                                                        {formData.publisher_2}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        
+                                        {(isAdmin || formData.place_2) && (
+                                            <div className="w-full sm:w-40 flex flex-col gap-1">
+                                                <label className="text-xs text-gray-500">Lieu</label>
+                                                {isAdmin ? (
+                                                    <input
+                                                        name="place_2"
+                                                        value={formData.place_2}
+                                                        onChange={handleChange}
+                                                        className="w-full bg-white border border-blue-300 rounded px-3 py-1.5"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-gray-700">
+                                                        {formData.place_2}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        
+                                        {(isAdmin || formData.publication_year) && (
+                                            <div className="w-full sm:w-24 flex flex-col gap-1">
+                                                <label className="text-xs text-gray-500">Année</label>
+                                                {isAdmin ? (
+                                                    <input
+                                                        name="publication_year"
+                                                        value={formData.publication_year}
+                                                        onChange={handleChange}
+                                                        className="w-full bg-white border border-blue-300 rounded px-3 py-1.5"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-gray-700">
+                                                        {formData.publication_year}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
-                            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
-                                <div></div> {/* Spacer */}
-                                <div className="flex gap-4 items-center w-full">
-                                    <span className="text-gray-500 w-16">Lieu</span>
-                                    <input
-                                        name="place_2"
-                                        value={formData.place_2}
-                                        onChange={handleChange}
-                                        className="w-40 bg-white border border-blue-300 rounded px-3 py-1.5"
-                                    />
-                                    <span className="text-gray-500 ml-2">Année</span>
-                                    <input
-                                        name="publication_year"
-                                        value={formData.publication_year}
-                                        onChange={handleChange}
-                                        className="w-24 bg-white border border-blue-300 rounded px-3 py-1.5"
-                                    />
-                                </div>
-                            </div>
-                        </div>
+                        )}
 
                         {/* Content Textareas */}
-                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4 mt-4">
-                            <label className="text-gray-500 mt-2">Sommaire *</label>
-                            <textarea
-                                name="summary"
-                                value={formData.summary}
-                                onChange={handleChange}
-                                rows={4}
-                                className="w-full bg-white border border-blue-300 rounded px-3 py-2"
-                            ></textarea>
-                        </div>
-                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4">
-                            <label className="text-gray-500 mt-2">Résumé *</label>
-                            <textarea
-                                name="abstract"
-                                value={formData.abstract}
-                                onChange={handleChange}
-                                rows={4}
-                                className="w-full bg-white border border-blue-300 rounded px-3 py-2"
-                            ></textarea>
-                        </div>
-                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4">
-                            <label className="text-gray-500 mt-2">Mots Clés *</label>
-                            <textarea
-                                name="keywords"
-                                value={formData.keywords}
-                                onChange={handleChange}
-                                rows={2}
-                                className="w-full bg-white border border-blue-300 rounded px-3 py-2"
-                            ></textarea>
+                        <div className="space-y-4 mt-4">
+                            <div className="flex flex-col gap-2">
+                                <label className="font-bold text-gray-700">Sommaire *</label>
+                                <textarea
+                                    name="summary"
+                                    value={formData.summary}
+                                    onChange={handleChange}
+                                    rows={4}
+                                    className="w-full bg-white border border-blue-300 rounded px-3 py-2"
+                                ></textarea>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="font-bold text-gray-700">Résumé *</label>
+                                <textarea
+                                    name="abstract"
+                                    value={formData.abstract}
+                                    onChange={handleChange}
+                                    rows={4}
+                                    className="w-full bg-white border border-blue-300 rounded px-3 py-2"
+                                ></textarea>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="font-bold text-gray-700">Mots Clés *</label>
+                                <textarea
+                                    name="keywords"
+                                    value={formData.keywords}
+                                    onChange={handleChange}
+                                    rows={2}
+                                    className="w-full bg-white border border-blue-300 rounded px-3 py-2"
+                                ></textarea>
+                            </div>
                         </div>
 
                         {/* --- FILES UPLOAD --- */}
@@ -517,7 +727,7 @@ const PublicationForm = () => {
                                         {formData.file_doc_url && (
                                             <a
                                                 href="#"
-                                                onClick={(e) => { e.preventDefault(); downloadFile(formData.file_doc_url, 'doc'); }}
+                                                onClick={(e) => { e.preventDefault(); downloadFile(formData.file_doc_url); }}
                                                 className="text-sm text-blue-600 underline whitespace-nowrap"
                                             >
                                                 Voir fichier actuel
@@ -545,7 +755,7 @@ const PublicationForm = () => {
                                         {formData.file_pdf_url && (
                                             <a
                                                 href="#"
-                                                onClick={(e) => { e.preventDefault(); downloadFile(formData.file_pdf_url, 'pdf'); }}
+                                                onClick={(e) => { e.preventDefault(); downloadFile(formData.file_pdf_url); }}
                                                 className="text-sm text-red-600 underline whitespace-nowrap"
                                             >
                                                 Voir fichier actuel
@@ -559,19 +769,27 @@ const PublicationForm = () => {
                     </div>
 
                     {/* --- RIGHT COLUMN --- */}
-                    <div className="space-y-4 border-l pl-8 border-gray-100">
+                    <div className="space-y-4 lg:border-l lg:pl-8 border-gray-100">
 
-                        {/* ISBN */}
-                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
-                            <label className="font-bold text-gray-800">ISBN</label>
-                            <input
-                                name="isbn"
-                                value={formData.isbn}
-                                onChange={handleChange}
-                                className="w-64 bg-white border border-blue-300 rounded px-3 py-1.5 bg-blue-50"
-                            />
-                        </div>
-
+                        {/* ISBN : ADMIN ONLY EDIT, AUTHOR READ-ONLY IF SET, HIDDEN IF EMPTY */}
+                        {(isAdmin || formData.isbn) && (
+                            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] items-center gap-4">
+                                <label className="font-bold text-gray-800">ISBN</label>
+                                {isAdmin ? (
+                                    <input
+                                        name="isbn"
+                                        value={formData.isbn}
+                                        onChange={handleChange}
+                                        className="w-64 bg-white border border-blue-300 rounded px-3 py-1.5 bg-blue-50"
+                                        placeholder="000-0-00-000000-0"
+                                    />
+                                ) : (
+                                    <div className="w-64 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded text-gray-600 font-mono">
+                                        {formData.isbn}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         {/* Position - Only Admin can see/edit, OR Author can see but readonly?
                         The requirement says Author should not validate. Let's make it read-only or hidden.
                         Let's show it read-only for feedback.
@@ -643,110 +861,84 @@ const PublicationForm = () => {
                             </div>
                         </div>
 
-                        {/* Authors */}
-                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4 mt-6">
-                            <label className="text-gray-500 mt-2">Auteur principal :</label>
-                            <div className="w-full space-y-2">
-                                <div className="flex items-center gap-4">
-                                    <span className="text-gray-500 w-16">Nom *</span>
-                                    <input
-                                        name="main_author_name"
-                                        value={formData.main_author_name}
-                                        onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
-                                    />
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <span className="text-gray-500 w-16">Prénom *</span>
-                                    <input
-                                        name="main_author_firstname"
-                                        value={formData.main_author_firstname}
-                                        onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
-                                    />
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Second Author */}
-                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4 mt-4">
-                            <label className="text-gray-500 mt-2">Auteur :</label>
-                            <div className="w-full space-y-2">
-                                <div className="flex items-center gap-4">
-                                    <span className="text-gray-500 w-16">Nom</span>
-                                    <input
-                                        name="author_2_name"
-                                        value={formData.author_2_name}
-                                        onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
-                                    />
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <span className="text-gray-500 w-16">Prénom</span>
-                                    <input
-                                        name="author_2_firstname"
-                                        value={formData.author_2_firstname}
-                                        onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
-                                    />
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <span className="text-gray-500 w-16">Fonction</span>
-                                    <select
-                                        name="author_2_role"
-                                        value={formData.author_2_role}
-                                        onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
-                                    >
-                                        <option>Préparation</option>
-                                        <option>Traduction</option>
-                                        <option>Illustration</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Description */}
-                        <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] gap-4 mt-8">
-                            <label className="text-gray-500 mt-2">Description :</label>
-                            <div className="w-full space-y-2">
+                        {/* Description / Technical Details */}
+                        <div className="mt-8 bg-gray-50 border border-gray-200 rounded-xl p-4">
+                            <h3 className="font-bold text-gray-700 mb-2">Description Technique</h3>
+                            
+                            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-4 text-xs text-yellow-800">
+                                <p className="font-bold">Note Importante :</p>
+                                <p>Ces informations sont à titre indicatif. L'auteur peut proposer ces détails, mais la maison d'édition se réserve le droit exclusif de décider ou modifier la forme technique finale de l'ouvrage.</p>
+                            </div>
+
+                            <div className="space-y-3">
                                 <div className="flex items-center gap-4">
-                                    <span className="text-gray-500 w-32">Nombre de pages</span>
+                                    <span className="text-gray-500 w-32 text-sm">Nombre de pages</span>
                                     <input
                                         name="page_count"
                                         value={formData.page_count}
                                         onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
+                                        className="flex-1 bg-white border border-gray-300 rounded px-3 py-1.5 text-sm"
+                                        placeholder="Ex: 250"
                                     />
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <span className="text-gray-500 w-32">Illustrations</span>
+                                    <span className="text-gray-500 w-32 text-sm">Illustrations</span>
                                     <input
                                         name="illustrations"
                                         value={formData.illustrations}
                                         onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
+                                        className="flex-1 bg-white border border-gray-300 rounded px-3 py-1.5 text-sm"
+                                        placeholder="Ex: Oui, N&B"
                                     />
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <span className="text-gray-500 w-32">Nombre de tomes</span>
+                                    <span className="text-gray-500 w-32 text-sm">Nombre de tomes</span>
                                     <input
                                         name="volume_count"
                                         value={formData.volume_count}
                                         onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
+                                        className="flex-1 bg-white border border-gray-300 rounded px-3 py-1.5 text-sm"
+                                        placeholder="Ex: 1"
                                     />
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <span className="text-gray-500 w-32">Format</span>
+                                    <span className="text-gray-500 w-32 text-sm">Format</span>
                                     <input
                                         name="format"
                                         value={formData.format}
                                         onChange={handleChange}
-                                        className="flex-1 bg-white border border-blue-300 rounded px-3 py-1.5"
+                                        className="flex-1 bg-white border border-gray-300 rounded px-3 py-1.5 text-sm"
+                                        placeholder="Ex: 15x21 cm"
                                     />
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Full Text */}
+                        <div className="mt-8 border-t pt-8">
+                            <button
+                                type="button"
+                                onClick={() => setIsFullTextOpen(!isFullTextOpen)}
+                                className="flex items-center gap-2 font-bold text-gray-800 mb-4 hover:text-blue-600 transition-colors"
+                            >
+                                {isFullTextOpen ? '▼' : '►'} Texte Intégral
+                            </button>
+                            
+                            {isFullTextOpen && (
+                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                    <textarea
+                                        name="full_text"
+                                        value={formData.full_text || ''}
+                                        onChange={handleChange}
+                                        rows={15}
+                                        className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm font-mono"
+                                        placeholder="Collez ici le texte intégral du manuscrit..."
+                                        disabled={isLocked}
+                                    />
+                                </div>
+                            )}
                         </div>
 
                     </div>
@@ -803,10 +995,16 @@ const PublicationForm = () => {
                             <span className="font-bold">Auteur Principal :</span>
                             <span className="uppercase">{formData.main_author_name} {formData.main_author_firstname}</span>
 
-                            {formData.author_2_name && (
+                            {formData.co_authors && formData.co_authors.length > 0 && (
                                 <>
-                                    <span className="font-bold">Auteur Secondaire :</span>
-                                    <span>{formData.author_2_name} {formData.author_2_firstname} ({formData.author_2_role})</span>
+                                    <span className="font-bold max-w-[150px]">Autres Auteurs :</span>
+                                    <div className="flex flex-col">
+                                        {formData.co_authors.map((author, index) => (
+                                            <span key={index}>
+                                                {author.name} {author.firstname} ({author.role})
+                                            </span>
+                                        ))}
+                                    </div>
                                 </>
                             )}
 
