@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext.jsx';
+import { LandingContentProvider } from './contexts/LandingContentContext.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/auth/Login.jsx';
 import AdminLayout from './components/layouts/AdminLayout.jsx';
@@ -14,6 +15,7 @@ import ContentManager from './pages/admin/ContentManager.jsx';
 import PublicationForm from './pages/admin/PublicationForm.jsx';
 import AIEvaluationManager from './pages/admin/AIEvaluationManager.jsx';
 import AIConfig from './pages/admin/AIConfig.jsx';
+import LandingPageManager from './pages/admin/LandingPageManager.jsx';
 import AuthorLayout from './components/layouts/AuthorLayout.jsx';
 import AuthorRoute from './components/auth/AuthorRoute.jsx';
 import AuthorDashboard from './pages/author/AuthorDashboard.jsx';
@@ -33,6 +35,7 @@ function App() {
     return (
         <BrowserRouter>
             <AuthProvider>
+                <LandingContentProvider>
                 <div className={`min-h-screen bg-white selection:bg-violet-500/30 font-sans`}>
                     <Routes>
                         <Route path="/" element={<Landing />} />
@@ -53,6 +56,7 @@ function App() {
                             <Route path="content/:id" element={<PublicationForm />} />
                             <Route path="ai-analysis" element={<AIEvaluationManager />} />
                             <Route path="ai-config" element={<AIConfig />} />
+                            <Route path="landing" element={<LandingPageManager />} />
                             <Route path="profile" element={<ProfilePage />} />
                         </Route>
 
@@ -75,6 +79,7 @@ function App() {
                         </Route>
                     </Routes>
                 </div>
+                </LandingContentProvider>
             </AuthProvider>
         </BrowserRouter>
     )

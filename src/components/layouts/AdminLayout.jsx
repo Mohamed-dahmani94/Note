@@ -11,7 +11,8 @@ import {
     Menu,
     X,
     Bell,
-    BrainCircuit
+    BrainCircuit,
+    LayoutTemplate
 } from 'lucide-react';
 import LanguageSwitcher from '../LanguageSwitcher';
 
@@ -34,6 +35,7 @@ const AdminLayout = () => {
         { path: '/admin', end: true, icon: LayoutDashboard, label: t('dashboard') },
         { path: '/admin/users', icon: Users, label: t('users') },
         { path: '/admin/content', icon: BookOpen, label: t('content') },
+        { path: '/admin/landing', icon: LayoutTemplate, label: t('landing_page', 'Page d\'accueil') },
         { path: '/admin/ai-analysis', icon: BrainCircuit, label: t('ai_analysis') },
         { path: '/admin/ai-config', icon: Settings, label: t('ai_config', 'Configuration IA') },
     ];
